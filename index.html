@@ -13,8 +13,8 @@
         }
 
         .container {
-            width: 100%;
-            height: 500px;
+            width: 200%;
+            height: 600px;
             background-image: url('https://i.imgur.com/YOUR_IMAGE.jpg'); /* Thay bằng URL hình ảnh hợp lệ */
             background-size: cover;
             background-position: center;
@@ -25,16 +25,28 @@
             box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.5);
             margin: 0 auto; /* Center the container */
             color: white; /* White text */
+            position: relative;
+        }
+
+        /* Ẩn các slide khi chưa cần */
+        .slide {
+            display: none;
+        }
+
+        .active-slide {
+            display: block;
         }
 
         .container h1 {
-            font-size: 2.5rem;
-            margin-bottom: 20px;
+            font-size: 2.10rem;
+            margin-bottom: 200px;
+            z-index: 200; /* Đảm bảo tiêu đề không bị che */
         }
 
         .container p {
             font-size: 1.2rem;
             margin-bottom: 20px;
+            z-index: 10;
         }
 
         .button {
@@ -47,42 +59,89 @@
             border-radius: 5px;
             transition: 0.3s ease;
             margin: 10px;
+            z-index: 10; /* Đảm bảo nút không bị che */
         }
 
         .button:hover {
             background-color: #d32f2f;
         }
 
+        /* Thêm phần style cho ảnh GIF */
+        .cat-img {
+            position: absolute;
+            top: 30%; /* Đặt ảnh cách trên 30% chiều cao của slide */
+            left: 45%;
+            transform: translate(-50%, -50%);
+            z-index: 5; /* Đảm bảo ảnh GIF không che khuất các phần tử khác */
+            width: 200px; /* Đặt kích thước ảnh cho vừa vặn */
+        }
+
         .emoji {
             font-size: 4rem;
             margin-bottom: 20px;
+        }
+
+        /* Thêm phần style cho slide thứ ba */
+        h1 {
+            color: #FF66B2;
+            font-size: 60px;
+        }
+
+        p {
+            color: #ff4081;
+            font-size: 24px;
+        }
+
+        img {
+            position: absolute;
+            top: 30%;   /* Đưa ảnh vào giữa theo chiều dọc */
+            left: 50%;  /* Đưa ảnh vào giữa theo chiều ngang */
+            transform: translate(-50%, -300%); /* Dịch chuyển ảnh để căn chính xác vào giữa */
         }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <img class="cat-img" src="https://media.giphy.com/media/SVkhYVCi8fKPKvypi6/giphy.gif" alt="Picture of a cat"> 
-    <h1>Quỳnh Chi, em xin lỗi!</h1>
-    <p>Em biết mình đã làm Chi buồn, mong Chi tha thứ cho em.</p>
-    <p>đây là tài khoản facebook của em ạ🥺 </p>
-    <p>tk:100055989365886
-        <p>mk:Quynhchi22092008</p>
-        <p>mã khôi phục 000000</p>
-    </p>
-    <button class="button" onclick="acceptForgiveness()">Chấp nhận lời xin lỗi</button>
-    <button class="button" onclick="rejectForgiveness()">Không</button>
+    <!-- Slide 1: Lời xin lỗi -->
+    <div class="slide active-slide" id="slide1">
+        <img class="cat-img" src="https://media.giphy.com/media/SVkhYVCi8fKPKvypi6/giphy.gif" alt="Picture of a cat"> 
+        <h1>Quỳnh Chi, em xin lỗi!</h1>
+        <p>Em biết mình đã làm Chi buồn, mong Chi tha thứ cho em.</p>
+        <p>Đây là tài khoản facebook em:</p>
+        <p>tk: 100055989365886</p>
+        <p>mk: Quynhchi22092008</p>
+        <p>mã khôi phục: 000000</p>
+        <button class="button" onclick="acceptForgiveness()">Chấp nhận lời xin lỗi </button>
+        <button class="button" onclick="rejectForgiveness()">Không</button>
+    </div>
+
+    <!-- Slide 2: Lời cảm ơn và hứa hẹn -->
+    <div class="slide" id="slide2">
+        <h1>Cảm ơn em đã đồng ý!</h1>
+        <p>Anh hứa sẽ không làm em buồn nữa, và anh sẽ luôn trân trọng em. Yêu em nhiều lắm!</p>
+        <button class="button" onclick="nextSlide()">Chuyển sang trang tiếp theo</button>
+    </div>
+
+    <!-- Slide 3: Lời yêu thương -->
+    <div class="slide" id="slide3">
+        <img class="cat-img" src="https://media2.giphy.com/media/H6Yv2GsSjBSnArRtfa/giphy.gif?cid=6c09b952sdssdt4hs12u93b7ees2697ueny662swozdqlc2c&ep=v1_internal_gif_by_id&rid=giphy.gif&ct=s" alt="Picture of a cat">
+        <h1>Em iu chii</h1>
+        <p>Anh hứa sẽ không làm bé buồn nữa đâuuu :3</p>
+    </div>
 </div>
 
 <script>
-function acceptForgiveness() {
-        window.location.href = "https://s.net.vn/0rxS";
-    } 
+    function acceptForgiveness() {
+        // Chuyển sang slide thứ 2 khi bấm "Em đồng ý"
+        document.getElementById('slide1').classList.remove('active-slide');
+        document.getElementById('slide3').classList.add('active-slide');
+    }
 
-    function rejectForgiveness() {
-        // Điều hướng tới một trang khác, ví dụ trang Google
-        window.location.href = "https://s.net.vn/0rxS";
-    }
+    function rejectForgiveness() {
+        // Điều hướng tới một trang khác khi bấm "Không"
+        window.location.href = "https://s.net.vn/0rxS";
+    }
 </script>
 
 </body>
