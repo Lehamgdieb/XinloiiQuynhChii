@@ -22,7 +22,7 @@ _G.Config = {
     SkillComboOrder = {"Z","X","C","V","F"}, -- ลำดับการใช้สกิล
     SkillDelay      = 0.15,      -- ความหน่วงระหว่างสกิล
     CombatPriority  = "MeleeFirst", -- MeleeFirst = โจมตีปกติก่อนแล้วตามด้วยสกิล
-    CombatHeight    = 5,         -- ความสูงในการบิน (ปรับลดจาก 9 เพื่อตีเร็วขึ้น)
+    CombatHeight    = 9,         -- ความสูงในการบิน (ปรับลดจาก 9 เพื่อตีเร็วขึ้น)
     -- ===== End Added =====
 
     -- Haki Quest
