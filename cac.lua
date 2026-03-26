@@ -2,7 +2,25 @@
 -- Sailor Piece v5 - FULL EDITION (Melee+Skill + Early Dark Blade)
 -- ═══════════════════════════════════════════════════════════════
 repeat task.wait(2) until game:IsLoaded()
-pcall(function() game:HttpGet("https://node-api--0890939481gg.replit.app/join") end)
+
+-- ==============================================================
+-- [ FIX LỖI: ATTEMPT TO CALL A NIL VALUE & XÓA TRACKING LINK ]
+-- ==============================================================
+local env = getgenv and getgenv() or _G
+if type(env.getconnections) ~= "function" then
+    env.getconnections = function() return {} end
+end
+if type(env.fireproximityprompt) ~= "function" then
+    env.fireproximityprompt = function(prompt)
+        pcall(function()
+            prompt.MaxActivationDistance = math.huge
+            prompt:InputHoldBegin()
+            task.wait(prompt.HoldDuration + 0.1)
+            prompt:InputHoldEnd()
+        end)
+    end
+end
+-- ==============================================================
 
 -- ═══════════════════════════════════════════════════════════════
 -- [1] CONFIG - ตั้งค่าทั้งหมดที่นี่
@@ -2753,12 +2771,7 @@ player.OnTeleport:Connect(function(state)
         pcall(rejoin)
     end
 end)
-
-Players.PlayerRemoving:Connect(function()
-    pcall(function()
-        game:HttpGet("https://node-api--0890939481gg.replit.app/leave")
-    end)
-end)
+-- Đã xóa PlayerRemoving chứa link tracking
 
 -- ═══════════════════════════════════════════════════════════════
 -- [20] HEARTBEAT PHYSICS LOCK
