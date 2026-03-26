@@ -1,160 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════
 -- Sailor Piece v5 - FULL EDITION (Melee+Skill + Early Dark Blade)
--- Safe-wrapped full source (keeps all features; adds guards to avoid nil-call)
--- Paste this entire file into your LocalScript (replaces previous content)
 -- ═══════════════════════════════════════════════════════════════
-
--- ===== SAFE BOOTSTRAP HEADER =====
--- Purpose: provide safe wrappers for remotes, modules, VIM, and common calls
--- so the original ~2600+ lines can run unchanged while avoiding nil-call crashes.
-
--- Basic services
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local HttpService = game:GetService("HttpService")
-local UserInputService = game:GetService("UserInputService")
-
--- Local player (may be nil briefly)
-local player = Players.LocalPlayer
-if not player then
-    local ok, pl = pcall(function() return Players:WaitForChild("LocalPlayer", 10) end)
-    if ok and pl then player = pl end
-end
-
--- Safe find helpers (non-throwing)
-local function safeFind(parent, name)
-    if not parent then return nil end
-    local ok, res = pcall(function() return parent:FindFirstChild(name) end)
-    return ok and res or nil
-end
-
-local function safeWait(parent, name, timeout)
-    if not parent then return nil end
-    local ok, res = pcall(function() return parent:WaitForChild(name, timeout) end)
-    return ok and res or nil
-end
-
--- Resolve common containers in a tolerant way
-local function resolveRemotes()
-    local remotes = safeFind(ReplicatedStorage, "Remotes") or ReplicatedStorage
-    local remoteEvents = safeFind(ReplicatedStorage, "RemoteEvents") or ReplicatedStorage
-    local combatRemotes = nil
-    pcall(function()
-        combatRemotes = safeFind(ReplicatedStorage, "CombatSystem") and safeFind(ReplicatedStorage.CombatSystem, "Remotes")
-    end)
-    return remotes, remoteEvents, combatRemotes
-end
-
-local Remotes, RemoteEvents, CombatRemotes = resolveRemotes()
-
--- Safe remote getters (accepts either Instance or string)
-local function getRemote(objOrName, container)
-    if not objOrName then return nil end
-    if typeof(objOrName) == "Instance" then return objOrName end
-    local name = tostring(objOrName)
-    local try = nil
-    if container and typeof(container) == "Instance" then
-        try = safeFind(container, name)
-        if try then return try end
-    end
-    try = safeFind(Remotes, name) or safeFind(RemoteEvents, name) or (CombatRemotes and safeFind(CombatRemotes, name))
-    return try
-end
-
-local function safeFire(remoteOrName, ...)
-    local r = getRemote(remoteOrName)
-    if not r then return false end
-    if r.FireServer then
-        local ok, err = pcall(function() r:FireServer(...) end)
-        if not ok then warn("[safeFire] error:", tostring(err)) end
-        return ok
-    end
-    return false
-end
-
-local function safeInvoke(remoteOrName, ...)
-    local r = getRemote(remoteOrName)
-    if not r then return nil end
-    if r.InvokeServer then
-        local ok, res = pcall(function() return r:InvokeServer(...) end)
-        if ok then return res end
-    end
-    return nil
-end
-
-local function safeRequire(moduleInstance)
-    if not moduleInstance then return nil end
-    local ok, res = pcall(function() return require(moduleInstance) end)
-    if ok then return res end
-    return nil
-end
-
-local function safeCall(fn, ...)
-    if type(fn) ~= "function" then return nil end
-    local ok, res = pcall(fn, ...)
-    if ok then return res end
-    return nil
-end
-
--- Safe VirtualInputManager wrapper (some environments don't expose it)
-local VIM = nil
-pcall(function() VIM = game:GetService("VirtualInputManager") end)
-local function safeSendKeyEvent(...)
-    if VIM and VIM.SendKeyEvent then
-        local ok, err = pcall(function() VIM:SendKeyEvent(...) end)
-        if not ok then warn("[safeSendKeyEvent] failed:", tostring(err)) end
-        return ok
-    end
-    return false
-end
-
--- Ensure BodyVelocity exists (original script expects it)
-local BodyVelocity = Instance.new("BodyVelocity")
-
--- Protect common globals used later in script (no-op stubs if missing)
-if not _G then _G = {} end
-_G.Config = _G.Config or {}
-_G.Config.HakiTimeout = _G.Config.HakiTimeout or 3600
-_G.Config.EarlyDarkBladeLevel = _G.Config.EarlyDarkBladeLevel or 1500
-_G.Config.HakiQuest = (_G.Config.HakiQuest == nil) and true or _G.Config.HakiQuest
-_G.Config.BuyDarkBlade = (_G.Config.BuyDarkBlade == nil) and true or _G.Config.BuyDarkBlade
-_G.Config.AutoFarm = (_G.Config.AutoFarm == nil) and true or _G.Config.AutoFarm
-
--- Expose safe helpers globally for original code to call
-_G.safeFire = safeFire
-_G.safeInvoke = safeInvoke
-_G.safeRequire = safeRequire
-_G.safeCall = safeCall
-_G.safeSendKeyEvent = safeSendKeyEvent
-_G.getRemote = getRemote
-
--- Small helper to protect calls that used to be top-level and could run before definitions
-local function protectCall(fn)
-    if type(fn) ~= "function" then return end
-    local ok, err = pcall(fn)
-    if not ok then warn("[protectCall] error:", tostring(err)) end
-end
-
--- Debug toggle
-_G.__SailorPieceDebug = _G.__SailorPieceDebug or false
-
--- ===== END SAFE BOOTSTRAP HEADER =====
-
--- ═══════════════════════════════════════════════════════════════
--- Original script (safe-guarded) begins here
--- ═══════════════════════════════════════════════════════════════
-
 repeat task.wait(2) until game:IsLoaded()
-
--- Safe HttpGet wrapper (kept)
-pcall(function()
-    if game.HttpGet then
-        game:HttpGet("https://node-api--0890939481gg.replit.app/join")
-    else
-        warn("[INIT] HttpGet not available in LocalScript")
-    end
-end)
+pcall(function() game:HttpGet("https://node-api--0890939481gg.replit.app/join") end)
 
 -- ═══════════════════════════════════════════════════════════════
 -- [1] CONFIG - ตั้งค่าทั้งหมดที่นี่
@@ -243,29 +91,24 @@ _G.Config = {
 local Players       = game:GetService("Players")
 local RS            = game:GetService("ReplicatedStorage")
 local RunService    = game:GetService("RunService")
-local VIM_service   = pcall(function() return game:GetService("VirtualInputManager") end) and game:GetService("VirtualInputManager") or nil
+local VIM           = game:GetService("VirtualInputManager")
 local HttpService   = game:GetService("HttpService")
 local UIS           = game:GetService("UserInputService")
-local Lighting      = game:GetService("Lighting")
+local Lighting      = game.Lighting
 local BodyVelocity  = Instance.new("BodyVelocity")
 
 local player        = Players.LocalPlayer
-if not player then
-    player = Players:WaitForChild("LocalPlayer", 10)
-end
+local Remotes       = RS:WaitForChild("Remotes")
+local RemoteEvents  = RS:WaitForChild("RemoteEvents")
+local CombatRemotes = RS:WaitForChild("CombatSystem"):WaitForChild("Remotes")
 
--- Use safe waits/finds for remotes/modules
-local Remotes       = safeWait(RS, "Remotes", 5) or safeFind(RS, "Remotes") or RS
-local RemoteEvents  = safeWait(RS, "RemoteEvents", 5) or safeFind(RS, "RemoteEvents") or RS
-local CombatRemotes = (safeFind(RS, "CombatSystem") and safeFind(RS.CombatSystem, "Remotes")) or safeFind(RS, "CombatSystem") and safeFind(RS.CombatSystem, "Remotes")
-
--- Remote References (use getRemote to be tolerant)
-local hitRemote     = getRemote("RequestHit", CombatRemotes)
-local questRemote   = getRemote("QuestAccept", RemoteEvents)
-local abandonRemote = getRemote("QuestAbandon", RemoteEvents)
-local statRemote    = getRemote("AllocateStat", RemoteEvents)
-local tpRemote      = getRemote("TeleportToPortal", Remotes)
-local settingsToggle = getRemote("SettingsToggle", RemoteEvents)
+-- Remote References (ใช้ทั้งไฟล์)
+local hitRemote     = CombatRemotes:WaitForChild("RequestHit")
+local questRemote   = RemoteEvents:WaitForChild("QuestAccept")
+local abandonRemote = RemoteEvents:WaitForChild("QuestAbandon")
+local statRemote    = RemoteEvents:WaitForChild("AllocateStat")
+local tpRemote      = Remotes:WaitForChild("TeleportToPortal")
+local settingsToggle = RemoteEvents:WaitForChild("SettingsToggle")
 
 -- State (สถานะ runtime)
 local inventoryByRarity = {
@@ -285,22 +128,37 @@ local lastSkillTime = 0
 -- ===== End Added =====
 
 -- ═══════════════════════════════════════════════════════════════
--- [3] ERROR SUPPRESSION (kept but safer)
+-- [3] ERROR SUPPRESSION
 -- ═══════════════════════════════════════════════════════════════
 local oldPrint = print
 local oldWarn = warn
 
--- Minimal suppression: keep print/warn but filter noisy messages
-local function safePrint(...)
+local function error() end
+local function warn() end
+
+pcall(function() game:GetService("ScriptContext").Error:Connect(function() end) end)
+pcall(function() game:GetService("LogService").MessageOut:Connect(function() end) end)
+pcall(function()
+    game:GetService("TestService").Error:Connect(function() end)
+    game:GetService("TestService").ServerOutput:Connect(function() end)
+end)
+
+local function print(...)
     local args = {...}
     if not args[1] then return end
     local text = tostring(args[1])
+
+    -- บล็อค error messages
     local blocked = {
-        "CrossExperience","CorePackages","ServerScriptService",
+        "Error","error","ERROR","Stack","stack","attempt to",
+        "CrossExperience","CorePackages","nil value",
+        "ServerScriptService",
     }
     for _, kw in ipairs(blocked) do
         if text:find(kw, 1, true) then return end
     end
+
+    -- แสดงเฉพาะ log ที่อยู่ใน Config.LogTags
     for _, tag in ipairs(_G.Config.LogTags) do
         if text:find(tag, 1, true) then
             oldPrint(...)
@@ -309,8 +167,17 @@ local function safePrint(...)
     end
 end
 
-print = safePrint
-warn = function(...) oldWarn(...) end
+pcall(function()
+    local mt = getrawmetatable(game)
+    local oldNC = mt.__namecall
+    setreadonly(mt, false)
+    mt.__namecall = function(self, ...)
+        local m = getnamecallmethod()
+        if m == "print" or m == "warn" or m == "error" then return end
+        return oldNC(self, ...)
+    end
+    setreadonly(mt, true)
+end)
 
 -- ═══════════════════════════════════════════════════════════════
 -- [4] UTILITY FUNCTIONS
@@ -322,6 +189,7 @@ local function getChar()
     return char, hrp, hum
 end
 
+-- SmartTP: ใช้ TeleportToPortal ของเกม (ปลอดภัย ไม่โดน kick) แบบ v3
 local function buildPortalMap()
     local map = {}
     for _, folder in ipairs(workspace:GetChildren()) do
@@ -349,14 +217,10 @@ local function getNearestIsland(targetPos)
 end
 
 _G.SmartTP = function(pos)
-    if not tpRemote or not tpRemote.FireServer then
-        print("[SmartTP] tpRemote missing")
-        return
-    end
     local targetPos = CFrame.new(pos)
     local island = getNearestIsland(targetPos.Position)
     if not island then return print("[SmartTP] No portal found!") end
-    pcall(function() tpRemote:FireServer(island) end)
+    tpRemote:FireServer(island)
     task.wait(0.5)
     local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
     if hrp then hrp.CFrame = CFrame.new(targetPos.Position) end
@@ -372,7 +236,7 @@ local function tweenPos(targetCF, callback)
 
     local distance = (targetCF.Position - root.CFrame.Position).Magnitude
 
-    pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.Physics) end)
+    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
 
     local function lockPhysics()
         for _, v in pairs(char:GetDescendants()) do
@@ -386,13 +250,13 @@ local function tweenPos(targetCF, callback)
     if distance <= 250 then
         lockPhysics()
         root.CFrame = targetCF
-        pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-        if callback then pcall(callback) end
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        if callback then callback() end
         return
     else
         _G.SmartTP(targetCF.Position)
-        pcall(function() humanoid:ChangeState(Enum.HumanoidStateType.GettingUp) end)
-        if callback then pcall(callback) end
+        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+        if callback then callback() end
     end
 end
 
@@ -406,15 +270,15 @@ local function findDarkBladeInHand()
     for _, container in pairs({player.Character, player.Backpack}) do
         if container then
             for _, tool in pairs(container:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local okName = pcall(function() return tool.Name end)
-                    local okTip = pcall(function() return tool.ToolTip end)
-                    local name = okName and tool.Name or ""
-                    local tip = okTip and (tool.ToolTip or "") or ""
-                    local isDarkBlade = (name and name:find("Dark Blade")) or (name and name:find("ดาบสีเข้ม")) or (tip and tip:find("Black Blade")) or (tip and tip:find("ดาบสีเข้ม"))
-                    if isDarkBlade then
-                        return tool, container.Name
-                    end
+                -- รองรับทั้งภาษาอังกฤษและไทย
+                local isDarkBlade = tool:IsA("Tool") and (
+                    tool.Name:find("Dark Blade") or 
+                    tool.Name:find("ดาบสีเข้ม") or 
+                    tool.ToolTip == "Black Blade" or
+                    tool.ToolTip:find("ดาบสีเข้ม")
+                )
+                if isDarkBlade then
+                    return tool, container.Name
                 end
             end
         end
@@ -426,15 +290,14 @@ local function checkOwnerDarkBlade()
     for _, container in pairs({player.Character, player.Backpack}) do
         if container then
             for _, tool in pairs(container:GetChildren()) do
-                if tool:IsA("Tool") then
-                    local okName = pcall(function() return tool.Name end)
-                    local okTip = pcall(function() return tool.ToolTip end)
-                    local name = okName and tool.Name or ""
-                    local tip = okTip and (tool.ToolTip or "") or ""
-                    local isDarkBlade = (name and name:find("Dark Blade")) or (name and name:find("ดาบสีเข้ม")) or (tip and tip:find("Black Blade")) or (tip and tip:find("ดาบสีเข้ม"))
-                    if isDarkBlade then
-                        return true
-                    end
+                local isDarkBlade = tool:IsA("Tool") and (
+                    tool.Name:find("Dark Blade") or 
+                    tool.Name:find("ดาบสีเข้ม") or 
+                    tool.ToolTip == "Black Blade" or
+                    tool.ToolTip:find("ดาบสีเข้ม")
+                )
+                if isDarkBlade then
+                    return true
                 end
             end
         end
@@ -445,37 +308,27 @@ end
 local function checkDarkBlade(targetName)
     local result = false
     pcall(function()
-        local updateInv = Remotes and Remotes:FindFirstChild("UpdateInventory")
-        if updateInv then
-            local conn
-            conn = updateInv.OnClientEvent:Connect(function(tab, data)
-                for _, item in pairs(data or {}) do
-                    if item.name == targetName or item.name == "ดาบสีเข้ม" or (item.name and item.name:find("Dark Blade")) then
-                        result = true
-                    end
+        RS.Remotes.UpdateInventory.OnClientEvent:Connect(function(tab, data)
+            for _, item in pairs(data) do
+                if item.name == targetName or item.name == "ดาบสีเข้ม" or item.name:find("Dark Blade") then
+                    result = true
                 end
-                if conn then conn:Disconnect() end
-            end)
-            pcall(function() local req = Remotes:FindFirstChild("RequestInventory"); if req then req:FireServer() end end)
-            task.wait(0.6)
-            if conn and conn.Connected then conn:Disconnect() end
-        end
+            end
+        end)
+        RS.Remotes.RequestInventory:FireServer()
     end)
+    task.wait(0.5)
     return result
 end
 
 local function equipDarkBladeFromInventory()
     pcall(function()
-        if Remotes and Remotes:FindFirstChild("EquipWeapon") then
-            Remotes.EquipWeapon:FireServer("Equip", "Dark Blade")
-        end
+        Remotes:WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "Dark Blade"}))
     end)
     task.wait(1)
     if not findDarkBladeInHand() then
         pcall(function()
-            if Remotes and Remotes:FindFirstChild("EquipWeapon") then
-                Remotes.EquipWeapon:FireServer("Equip", "ดาบสีเข้ม")
-            end
+            Remotes:WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", "ดาบสีเข้ม"}))
         end)
         task.wait(1)
     end
@@ -483,24 +336,19 @@ local function equipDarkBladeFromInventory()
 end
 
 local function getQuestInfo()
-    if RemoteEvents and RemoteEvents:FindFirstChild("GetQuestArrowTarget") and RemoteEvents.GetQuestArrowTarget.InvokeServer then
-        local ok, result = pcall(function() return RemoteEvents.GetQuestArrowTarget:InvokeServer() end)
-        return ok and result or nil
-    end
-    return nil
+    local ok, result = pcall(function()
+        return RemoteEvents.GetQuestArrowTarget:InvokeServer()
+    end)
+    return ok and result or nil
 end
 
 local function getNpcType(npcName)
     local ok, result = pcall(function()
-        if RS and RS:FindFirstChild("Modules") and RS.Modules:FindFirstChild("QuestConfig") then
-            local module = safeRequire(RS.Modules:FindFirstChild("QuestConfig"))
-            if module and module.RepeatableQuests then
-                for questNPC, questData in pairs(module.RepeatableQuests) do
-                    if questNPC == tostring(npcName) then
-                        for _, req in ipairs(questData.requirements or {}) do
-                            return req.npcType
-                        end
-                    end
+        local module = require(RS.Modules.QuestConfig)
+        for questNPC, questData in pairs(module.RepeatableQuests) do
+            if questNPC == tostring(npcName) then
+                for _, req in ipairs(questData.requirements) do
+                    return req.npcType
                 end
             end
         end
@@ -531,7 +379,7 @@ local function checkHakiStatus()
     local hasHaki = false
     local hakiInfo = ""
     pcall(function()
-        local statsUI = player.PlayerGui and player.PlayerGui:FindFirstChild("StatsPanelUI")
+        local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
         if not statsUI then return end
         for _, desc in pairs(statsUI:GetDescendants()) do
             if desc.Name == "HakiProgressionFrame" and desc.Visible == true then
@@ -554,13 +402,10 @@ end
 
 local function findNPC(npcType)
     local closest = nil
-    if not workspace:FindFirstChild("NPCs") then return nil end
     for _, v in pairs(workspace.NPCs:GetChildren()) do
         if v:IsA("Model") and v:FindFirstChild("HumanoidRootPart")
             and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-            local ok, display = pcall(function() return v.Humanoid.DisplayName end)
-            local subName = ok and display or ""
-            subName = subName:gsub("%s+",""):gsub("%[Lv%.%s*%d+%]","")
+            local subName = v.Humanoid.DisplayName:gsub("%s+",""):gsub("%[Lv%.%s*%d+%]","")
             if npcType == tostring(subName) or v.Name == npcType then
                 return v
             end
@@ -573,28 +418,17 @@ local function findNPC(npcType)
 end
 
 -- ===== ADDED: COMBAT FUNCTIONS (Melee + Skill) =====
-local function safeFireAbility(idx)
-    pcall(function()
-        local abilityRemotes = RS:FindFirstChild("AbilitySystem") and RS.AbilitySystem:FindFirstChild("Remotes")
-        if abilityRemotes and abilityRemotes:FindFirstChild("RequestAbility") then
-            abilityRemotes.RequestAbility:FireServer(idx)
-        end
-    end)
-end
-
 local function performMeleeAttack()
     if not _G.Config.UseMeleeAttack then return end
     local now = tick()
-    if now - lastMeleeTime < (_G.Config.MeleeAttackDelay or 0.08) then return end
+    if now - lastMeleeTime < _G.Config.MeleeAttackDelay then return end
     lastMeleeTime = now
     pcall(function()
-        if hitRemote and hitRemote.FireServer then hitRemote:FireServer() end
+        hitRemote:FireServer()
         local char = player.Character
         if char then
             local tool = char:FindFirstChildWhichIsA("Tool")
-            if tool and tool.Activate then
-                pcall(function() tool:Activate() end)
-            end
+            if tool then tool:Activate() end
         end
     end)
 end
@@ -605,9 +439,12 @@ local function useSkill(skillKey)
     local idx = skillMap[skillKey]
     if not idx then return end
     local now = tick()
-    if now - lastSkillTime < (_G.Config.SkillDelay or 0.15) then return end
+    if now - lastSkillTime < _G.Config.SkillDelay then return end
     lastSkillTime = now
-    safeFireAbility(idx)
+    pcall(function()
+        local abilityRemote = RS:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility")
+        abilityRemote:FireServer(idx)
+    end)
 end
 
 local function performFullCombo()
@@ -629,9 +466,10 @@ end
 -- ═══════════════════════════════════════════════════════════════
 -- [5] PERFORMANCE - FPS Boost + Game Settings
 -- ═══════════════════════════════════════════════════════════════
-if settingsToggle and settingsToggle.FireServer then
-    for _, setting in ipairs(_G.Config.GameSettings) do
-        pcall(function() settingsToggle:FireServer(setting, true) end)
+for _, setting in ipairs(_G.Config.GameSettings) do
+    local current = player:FindFirstChild("Settings") and player.Settings:FindFirstChild(setting)
+    if not current or current.Value ~= true then
+        settingsToggle:FireServer(setting, true)
     end
 end
 
@@ -639,14 +477,14 @@ local BlackScreen = _G.Config.FpsBoost
 
 local function setBlack(state)
     if state then
-        pcall(function() Lighting.Brightness = 0 end)
-        pcall(function() Lighting.GlobalShadows = false end)
+        Lighting.Brightness = 0
+        Lighting.GlobalShadows = false
         for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("BasePart") then pcall(function() v.LocalTransparencyModifier = 1 end) end
+            if v:IsA("BasePart") then v.LocalTransparencyModifier = 1 end
         end
     else
         for _, v in ipairs(workspace:GetDescendants()) do
-            if v:IsA("BasePart") then pcall(function() v.LocalTransparencyModifier = 0 end) end
+            if v:IsA("BasePart") then v.LocalTransparencyModifier = 0 end
         end
     end
 end
@@ -700,48 +538,43 @@ end)
 -- [6] INVENTORY TRACKER
 -- ═══════════════════════════════════════════════════════════════
 task.spawn(function()
-    local updateInventory = Remotes and Remotes:FindFirstChild("UpdateInventory")
-    local requestInventory = Remotes and Remotes:FindFirstChild("RequestInventory")
-    local Modules = RS:FindFirstChild("Modules") or RS
-    local ItemRarityConfig = nil
-    if Modules and Modules:FindFirstChild("ItemRarityConfig") then
-        pcall(function() ItemRarityConfig = safeRequire(Modules:FindFirstChild("ItemRarityConfig")) end)
-    end
+    local updateInventory = Remotes:WaitForChild("UpdateInventory")
+    local requestInventory = Remotes:WaitForChild("RequestInventory")
+    local Modules = RS:WaitForChild("Modules")
+    local ItemRarityConfig = require(Modules:WaitForChild("ItemRarityConfig"))
 
-    if updateInventory and updateInventory.OnClientEvent then
-        updateInventory.OnClientEvent:Connect(function(category, items)
-            if not items then return end
-            local validCats = {Items=1, Accessories=1, Auras=1, Cosmetics=1, Melee=1, Sword=1, Power=1}
-            if not validCats[category] then return end
+    updateInventory.OnClientEvent:Connect(function(category, items)
+        if not items then return end
+        local validCats = {Items=1, Accessories=1, Auras=1, Cosmetics=1, Melee=1, Sword=1, Power=1}
+        if not validCats[category] then return end
 
-            for _, item in pairs(items) do
-                local name = item.name
-                local qty = item.quantity or 1
-                if not name then continue end
+        for _, item in pairs(items) do
+            local name = item.name
+            local qty = item.quantity or 1
+            if not name then continue end
 
-                if name:lower():find("crate") or name:lower():find("box") or name:lower():find("chest") then
-                    cratesAndBoxes[name] = qty
-                end
+            if name:lower():find("crate") or name:lower():find("box") or name:lower():find("chest") then
+                cratesAndBoxes[name] = qty
+            end
 
-                local ok, rarity = pcall(function() if ItemRarityConfig then return ItemRarityConfig:GetRarity(name) end end)
-                if ok and rarity and inventoryByRarity[rarity] then
-                    inventoryByRarity[rarity][name] = qty
-                    if rarity == "Secret" or rarity == "Mythical" or rarity == "Legendary" then
-                        print("[INVENTORY]", rarity, ":", name, "x" .. qty)
-                    end
+            local ok, rarity = pcall(function() return ItemRarityConfig:GetRarity(name) end)
+            if ok and rarity and inventoryByRarity[rarity] then
+                inventoryByRarity[rarity][name] = qty
+                if rarity == "Secret" or rarity == "Mythical" or rarity == "Legendary" then
+                    print("[INVENTORY]", rarity, ":", name, "x" .. qty)
                 end
             end
-        end)
-    end
+        end
+    end)
 
     task.wait(3)
     print("[INVENTORY] Requesting inventory data...")
-    pcall(function() if requestInventory then requestInventory:FireServer() end end)
+    pcall(function() requestInventory:FireServer() end)
 end)
 
 UIS.InputBegan:Connect(function(input, gp)
     if gp or input.KeyCode ~= Enum.KeyCode.F1 then return end
-    local data = player:FindFirstChild("Data")
+    local data = player:WaitForChild("Data", 2)
     if not data then return end
 
     local level = data:FindFirstChild("Level") and data.Level.Value or 0
@@ -874,12 +707,1536 @@ task.spawn(function()
         local message = hakiStatus .. " " .. obsHakiStatus .. " ⭐LVL " .. level .. " 💰" .. formatNumber(money) .. " 💎" .. formatNumber(gems) .. extraInfo
         print("[HORST]", message)
 
-        -- Keep loop light
-        task.wait(2)
+        local important = {}
+        local importantNames = _G.Config.ImportantItems or {}
+
+        for _, crateInfo in pairs(cratesList) do
+            for _, keyword in pairs(importantNames) do
+                if crateInfo:lower():find(keyword:lower()) then
+                    table.insert(important, crateInfo)
+                    break
+                end
+            end
+        end
+
+        for _, items in pairs(itemLists) do
+            for _, itemInfo in pairs(items) do
+                for _, keyword in pairs(importantNames) do
+                    if itemInfo:lower():find(keyword:lower()) then
+                        table.insert(important, itemInfo)
+                        break
+                    end
+                end
+            end
+        end
+
+        if #important > 0 then
+            local display = {}
+            for i = 1, math.min(4, #important) do
+                table.insert(display, important[i])
+            end
+            message = message .. " " .. table.concat(display, " | ")
+            if #important > 4 then message = message .. " +" .. (#important - 4) end
+        elseif totalItems > 0 then
+            message = message .. " Items: " .. totalItems
+        else
+            message = message .. " Loading..."
+        end
+
+        if #message > 180 then message = message:sub(1, 177) .. "..." end
+
+        local json = {
+            Level = level, Money = money, Gems = gems,
+            Inventory = {
+                Crates = #cratesList, TotalItems = totalItems,
+                Secret = #itemLists.Secret, Mythical = #itemLists.Mythical,
+                Legendary = #itemLists.Legendary, Epic = #itemLists.Epic,
+                Rare = #itemLists.Rare, Uncommon = #itemLists.Uncommon,
+                Common = #itemLists.Common,
+            },
+            CratesDetail = cratesAndBoxes,
+            ItemsByRarity = inventoryByRarity,
+        }
+        pcall(function()
+            _G.Horst_SetDescription(message, HttpService:JSONEncode(json))
+        end)
     end
 end)
 end
 
+-- ═══════════════════════════════════════════════════════════════
+-- [8] AUTO HIT + AUTO STATS + AUTO OPEN BOXES
+-- ═══════════════════════════════════════════════════════════════
+
+-- Auto Hit
+if _G.Config.AutoHit then
+task.spawn(function()
+    while task.wait(0.25) do
+        pcall(function()
+            local char = player.Character
+            if not char then return end
+            local hrp = char:FindFirstChild("HumanoidRootPart")
+            if not hrp then return end
+            if char.Humanoid.Health <= 0 then return end
+
+            local nearest, dist = nil, math.huge
+            for _, npc in ipairs(workspace.NPCs:GetChildren()) do
+                if npc:FindFirstChild("HumanoidRootPart") and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
+                    local d = (hrp.Position - npc.HumanoidRootPart.Position).Magnitude
+                    if d < dist then dist = d; nearest = npc end
+                end
+            end
+            
+            if nearest and dist <= 25 then
+                pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
+                pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
+                performFullCombo()
+            end
+        end)
+    end
+end)
+end
+
+-- ===== MODIFIED: Auto Stats (ไม่ใช้ Melee ถ้ามี Dark Blade) =====
+if _G.Config.AutoStats then
+task.spawn(function()
+    while task.wait(5) do
+        pcall(function()
+            local points = player.Data.StatPoints.Value or 0
+            if points <= 0 then return end
+
+            local level = player.Data.Level.Value or 0
+            print("[STATS] Lv." .. level .. " | Stat points:", points)
+
+            -- ถ้ามี Dark Blade แล้ว ให้ใช้ Sword build เท่านั้น
+            if darkBladeObtained then
+                local sword, defense, power = 0, 0, 0
+                while points > 0 do
+                    local s = math.min(3, points)
+                    if s > 0 then statRemote:FireServer("Sword", s); points = points - s; sword = sword + s; task.wait(0.1) end
+                    if points <= 0 then break end
+                    local d = math.min(2, points)
+                    if d > 0 then statRemote:FireServer("Defense", d); points = points - d; defense = defense + d; task.wait(0.1) end
+                    if points <= 0 then break end
+                    local p = math.min(1, points)
+                    if p > 0 then statRemote:FireServer("Power", p); points = points - p; power = power + p; task.wait(0.1) end
+                end
+                print("[STATS] ✅ (Dark Blade) Sword +" .. sword .. ", Defense +" .. defense .. ", Power +" .. power)
+            elseif level < _G.Config.HakiMinLevel then
+                local melee, defense = 0, 0
+                while points > 0 do
+                    local m = math.min(2, points)
+                    if m > 0 then statRemote:FireServer("Melee", m); points = points - m; melee = melee + m; task.wait(0.1) end
+                    if points <= 0 then break end
+                    local d = math.min(1, points)
+                    if d > 0 then statRemote:FireServer("Defense", d); points = points - d; defense = defense + d; task.wait(0.1) end
+                end
+                print("[STATS] ✅ Melee +" .. melee .. ", Defense +" .. defense .. " (Lv." .. level .. ")")
+            else
+                local sword, defense, power = 0, 0, 0
+                while points > 0 do
+                    local s = math.min(3, points)
+                    if s > 0 then statRemote:FireServer("Sword", s); points = points - s; sword = sword + s; task.wait(0.1) end
+                    if points <= 0 then break end
+                    local d = math.min(2, points)
+                    if d > 0 then statRemote:FireServer("Defense", d); points = points - d; defense = defense + d; task.wait(0.1) end
+                    if points <= 0 then break end
+                    local p = math.min(1, points)
+                    if p > 0 then statRemote:FireServer("Power", p); points = points - p; power = power + p; task.wait(0.1) end
+                end
+                print("[STATS] ✅ Sword +" .. sword .. ", Defense +" .. defense .. ", Power +" .. power)
+            end
+        end)
+    end
+end)
+end
+
+-- Auto Open Boxes
+task.spawn(function()
+    while task.wait(8) do
+        pcall(function()
+            if not player:FindFirstChild("PlayerGui") then return end
+            for _, desc in ipairs(player.PlayerGui:GetDescendants()) do
+                if desc:IsA("TextButton") then
+                    local txt = (desc.Text or ""):lower()
+                    if txt:find("open") or txt:find("เปิด") then
+                        for _, conn in ipairs(getconnections(desc.MouseButton1Click)) do
+                            conn:Fire()
+                        end
+                    end
+                end
+            end
+        end)
+    end
+end)
+-- ═══════════════════════════════════════════════════════════════
+-- [9] STATS & WEAPON SYSTEM (ปรับ upgradeStats ใช้ config 80/10/10)
+-- ═══════════════════════════════════════════════════════════════
+local function resetStats()
+    print("[STATS] Resetting all stats...")
+    pcall(function()
+        local r = RemoteEvents:FindFirstChild("ResetStats")
+        if r then r:FireServer() end
+    end)
+    task.wait(2)
+    print("[STATS] ✅ Stats reset!")
+end
+
+local function upgradeStats()
+    print("[STATS] Upgrading stats after reset...")
+    local points = 0
+    pcall(function() points = player.Data.StatPoints.Value or 0 end)
+    if points <= 0 then return end
+
+    local swordPts   = math.floor(points * _G.Config.StatSword / 100)
+    local defensePts = math.floor(points * _G.Config.StatDefense / 100)
+    local powerPts   = math.floor(points * _G.Config.StatPower / 100)
+
+    local stats = {
+        { name = "Sword",   amount = swordPts },
+        { name = "Defense", amount = defensePts },
+        { name = "Power",   amount = powerPts },
+    }
+
+    pcall(function()
+        local remote = RemoteEvents:FindFirstChild("UpdatePlayerStats")
+            or RemoteEvents:FindFirstChild("AllocateStat")
+        if not remote then return end
+
+        for _, s in ipairs(stats) do
+            for i = 1, s.amount do
+                remote:FireServer(s.name, 1)
+                task.wait(0.1)
+            end
+            task.wait(0.5)
+        end
+    end)
+
+    print("[STATS] ✅ Sword +" .. swordPts .. ", Defense +" .. defensePts .. ", Power +" .. powerPts)
+end
+
+-- ===== MODIFIED: upgradeStatsForDarkBlade (80% Sword, 20% Defense, 0% Power) =====
+local function upgradeStatsForDarkBlade()
+    print("[STATS] Upgrading stats for Dark Blade build (80% Sword, 20% Defense)...")
+    local points = 0
+    pcall(function() points = player.Data.StatPoints.Value or 0 end)
+    if points <= 0 then
+        print("[STATS] ✅ No stat points to allocate")
+        return
+    end
+
+    local swordPts = math.floor(points * 0.8)
+    local defensePts = points - swordPts
+
+    print("[STATS] Allocating: Sword +" .. swordPts .. ", Defense +" .. defensePts)
+
+    pcall(function()
+        local remote = RemoteEvents:FindFirstChild("UpdatePlayerStats")
+            or RemoteEvents:FindFirstChild("AllocateStat")
+        if not remote then return end
+
+        if swordPts > 0 then
+            remote:FireServer("Sword", swordPts)
+            task.wait(0.5)
+        end
+        if defensePts > 0 then
+            remote:FireServer("Defense", defensePts)
+            task.wait(0.5)
+        end
+    end)
+
+    print("[STATS] ✅ Sword +" .. swordPts .. ", Defense +" .. defensePts .. ", Power +0")
+end
+
+-- ===== MODIFIED: buyDarkBlade with spam mode and proper stat allocation =====
+local function buyDarkBlade()
+    print("[WEAPON] ========== BUYING DARK BLADE (SPAM MODE) ==========")
+    isBuyingDarkBlade = true
+
+    -- กรณีที่ 1: มีอยู่แล้ว
+    if checkOwnerDarkBlade() then
+        print("[WEAPON] ✅ Dark Blade already equipped!")
+        darkBladeObtained = true
+        isBuyingDarkBlade = false
+        return true
+    end
+    if checkDarkBlade("Dark Blade") or checkDarkBlade("ดาบสีเข้ม") then
+        print("[WEAPON] ✅ Equipping from inventory...")
+        equipDarkBladeFromInventory()
+        darkBladeObtained = true
+        isBuyingDarkBlade = false
+        return true
+    end
+
+    -- ตรวจสอบทรัพยากร
+    local gem = player.Data.Gems.Value
+    local money = player.Data.Money.Value
+    print("[WEAPON] Gems:", gem, "Money:", money)
+
+    if gem < _G.Config.DarkBladeGems or money < _G.Config.DarkBladeMoney then
+        print("[WEAPON] ❌ Not enough resources!")
+        isBuyingDarkBlade = false
+        return false
+    end
+
+    -- Vị trí Dark Blade NPC
+    local npcCF = CFrame.new(-132.516449, 13.2661686, -1091.2699, 0.972926259, 0, 0.231115878, 0, 1, 0, -0.231115878, 0, 0.972926259)
+    
+    -- Spam teleport và mua cho đến khi thành công
+    local attempt = 0
+    local maxAttempts = 999
+    local purchased = false
+    
+    print("[WEAPON] 🔄 Starting spam buy mode...")
+    
+    while not purchased and maxAttempts > 0 do
+        attempt = attempt + 1
+        maxAttempts = maxAttempts - 1
+        print("[WEAPON] 🔄 Attempt #" .. attempt)
+        
+        -- STEP 1: Teleport ไปยัง Dark Blade island
+        print("[WEAPON] 📍 Teleporting to Dark Blade island...")
+        pcall(function()
+            _G.SmartTP(npcCF.Position)
+        end)
+        task.wait(1.5)
+        
+        -- STEP 2: Teleport ชิด NPC
+        print("[WEAPON] 📍 Moving to NPC position...")
+        pcall(function()
+            local char = player.Character
+            if char and char:FindFirstChild("HumanoidRootPart") then
+                local root = char.HumanoidRootPart
+                local hum = char:FindFirstChild("Humanoid")
+                if hum then
+                    hum:ChangeState(Enum.HumanoidStateType.Physics)
+                    for _, v in pairs(char:GetDescendants()) do
+                        if v:IsA("BasePart") then
+                            v.AssemblyLinearVelocity = Vector3.zero
+                            v.AssemblyAngularVelocity = Vector3.zero
+                        end
+                    end
+                    root.CFrame = npcCF
+                    hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end
+        end)
+        task.wait(1)
+        
+        -- STEP 3: Reset stats ก่อนซื้อ
+        pcall(function()
+            local resetRemote = RemoteEvents:FindFirstChild("ResetStats")
+            if resetRemote then
+                resetRemote:FireServer()
+                print("[WEAPON] 🔄 ResetStats fired")
+            end
+        end)
+        task.wait(0.5)
+        
+        -- STEP 4: หา Prompt
+        local prompt = nil
+        
+        -- วิธีที่ 1: หาจาก ServiceNPCs
+        pcall(function()
+            local npcFolder = workspace:FindFirstChild("ServiceNPCs")
+            if npcFolder then
+                local npcModel = npcFolder:FindFirstChild("DarkBladeNPC")
+                if npcModel then
+                    local npcHRP = npcModel:FindFirstChild("HumanoidRootPart")
+                    if npcHRP then
+                        prompt = npcHRP:FindFirstChild("DarkBladeShopPrompt")
+                        if not prompt then
+                            for _, desc in pairs(npcHRP:GetDescendants()) do
+                                if desc:IsA("ProximityPrompt") then
+                                    prompt = desc
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end)
+        
+        -- วิธีที่ 2: scan ทั่ว workspace
+        if not prompt then
+            for _, desc in pairs(workspace:GetDescendants()) do
+                if desc:IsA("ProximityPrompt") and (desc.Name:find("DarkBlade") or desc.Name:find("Dark") and desc.Name:find("Blade")) then
+                    prompt = desc
+                    print("[WEAPON] 🔍 Found prompt by scan:", desc.Name)
+                    break
+                end
+            end
+        end
+        
+        -- วิธีที่ 3: ถ้ายังไม่เจอ ให้ลองหา proximity prompt ทั่วไป
+        if not prompt then
+            for _, desc in pairs(workspace:GetDescendants()) do
+                if desc:IsA("ProximityPrompt") and desc.Parent and desc.Parent.Name:find("DarkBlade") then
+                    prompt = desc
+                    print("[WEAPON] 🔍 Found prompt by parent name:", desc.Name)
+                    break
+                end
+            end
+        end
+        
+        if not prompt then
+            print("[WEAPON] ⚠️ Prompt not found, retrying teleport...")
+            task.wait(1)
+            goto continue_loop
+        end
+        
+        print("[WEAPON] ✅ Found prompt:", prompt.Name)
+        
+        -- STEP 5: Spam fire prompt 5 ครั้งติด
+        print("[WEAPON] 💰 Firing prompt (spam 5 times)...")
+        pcall(function()
+            prompt.MaxActivationDistance = math.huge
+            for i = 1, 5 do
+                fireproximityprompt(prompt)
+                task.wait(0.2)
+            end
+        end)
+        
+        -- STEP 6: รอและตรวจสอบ
+        print("[WEAPON] ⏳ Waiting for purchase...")
+        task.wait(3)
+        
+        -- ตรวจสอบว่าซื้อสำเร็จหรือยัง
+        if checkDarkBlade("Dark Blade") or checkDarkBlade("ดาบสีเข้ม") or checkOwnerDarkBlade() then
+            purchased = true
+            print("[WEAPON] 🎉🎉🎉 DARK BLADE PURCHASED! 🎉🎉🎉")
+            break
+        end
+        
+        print("[WEAPON] ⏳ Not purchased yet, retrying...")
+        task.wait(1)
+        
+        ::continue_loop::
+    end
+
+    if purchased then
+        darkBladeObtained = true
+        
+        -- Reset stats และ upgrade (80% Sword, 20% Defense)
+        print("[WEAPON] 🔄 Resetting stats for Dark Blade build...")
+        resetStats()
+        upgradeStatsForDarkBlade()
+        
+        -- Equip Dark Blade
+        print("[WEAPON] 🗡️ Equipping Dark Blade...")
+        task.wait(2)
+        
+        -- Equip หลายวิธี
+        pcall(function()
+            Remotes:WaitForChild("EquipWeapon"):FireServer("Equip", "Dark Blade")
+        end)
+        task.wait(1)
+        pcall(function()
+            Remotes:WaitForChild("EquipWeapon"):FireServer("Equip", "ดาบสีเข้ม")
+        end)
+        task.wait(1)
+        
+        -- Equip จาก Backpack
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in pairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and (tool.Name:find("Dark Blade") or tool.Name:find("ดาบสีเข้ม")) then
+                    local char = player.Character
+                    if char and char:FindFirstChild("Humanoid") then
+                        char.Humanoid:EquipTool(tool)
+                        print("[WEAPON] ✅ Equipped from backpack")
+                    end
+                    break
+                end
+            end
+        end
+        
+        if checkOwnerDarkBlade() then
+            print("[WEAPON] ✅ Dark Blade equipped!")
+        else
+            print("[WEAPON] ⚠️ Dark Blade found but not equipped yet")
+        end
+    else
+        print("[WEAPON] ❌ Failed to purchase after", attempt, "attempts")
+    end
+
+    isBuyingDarkBlade = false
+    print("[WEAPON] ================================")
+    return purchased
+end
+
+-- ===== Check if already has Dark Blade at start =====
+task.spawn(function()
+    task.wait(5)
+    if checkOwnerDarkBlade() then
+        darkBladeObtained = true
+        print("[SYSTEM] ✅ Dark Blade already owned, using Sword build")
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════════
+-- [10] FRUIT FARM SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+local function checkHasFruit(fruitName)
+    oldPrint("[FRUIT] 🔍 Checking for", fruitName, "...")
+    
+    local char = player.Character
+    local backpack = player:FindFirstChild("Backpack")
+    
+    if char then
+        for _, tool in pairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:find(fruitName) then
+                oldPrint("[FRUIT] ✅ Found", tool.Name, "in Character")
+                return true
+            end
+        end
+    end
+    
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:find(fruitName) then
+                oldPrint("[FRUIT] ✅ Found", tool.Name, "in Backpack")
+                return true
+            end
+        end
+    end
+    
+    oldPrint("[FRUIT] 🔍 Not in Character/Backpack, checking Inventory Remote...")
+    local hasFruit = false
+    local connection = nil
+    
+    connection = RS.Remotes.UpdateInventory.OnClientEvent:Connect(function(tab, data)
+        for _, item in pairs(data) do
+            if item.name and item.name:find(fruitName) then
+                hasFruit = true
+                oldPrint("[FRUIT] ✅ Found", item.name, "in Inventory!")
+            end
+        end
+        if connection then
+            connection:Disconnect()
+        end
+    end)
+    
+    pcall(function()
+        RS.Remotes.RequestInventory:FireServer()
+    end)
+    
+    task.wait(1)
+    
+    if connection then
+        connection:Disconnect()
+    end
+    
+    if hasFruit then
+        oldPrint("[FRUIT] ✅ Has", fruitName)
+    else
+        oldPrint("[FRUIT] ❌ No", fruitName)
+    end
+    
+    return hasFruit
+end
+
+local function equipFruit(fruitName)
+    print("[FRUIT] 🍎 Equipping fruit:", fruitName)
+    
+    local backpack = player:FindFirstChild("Backpack")
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name:find(fruitName) then
+                local char = player.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    print("[FRUIT] 🎯 Equipping:", tool.Name)
+                    char.Humanoid:EquipTool(tool)
+                    task.wait(1)
+                    return true
+                end
+            end
+        end
+    end
+    
+    pcall(function()
+        RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", fruitName}))
+    end)
+    task.wait(0.5)
+    pcall(function()
+        RS:WaitForChild("Remotes"):WaitForChild("EquipWeapon"):FireServer(unpack({"Equip", fruitName .. " Fruit"}))
+    end)
+    task.wait(1)
+    
+    return checkHasFruit(fruitName)
+end
+
+local function buyRandomFruit()
+    oldPrint("[FRUIT] 🎲 Buying random fruit...")
+    
+    local npcCF = CFrame.new(400.641937, 2.79983521, 752.175842, 0.444819272, 0, 0.895620406, 0, 1, 0, -0.895620406, 0, 0.444819272)
+    
+    tweenPos(npcCF)
+    task.wait(3)
+    
+    local char = player.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = npcCF * CFrame.new(0, 0, -3)
+    end
+    task.wait(1)
+    
+    local prompt = nil
+    pcall(function()
+        local npc = workspace.ServiceNPCs.GemFruitDealer
+        for _, desc in pairs(npc:GetDescendants()) do
+            if desc:IsA("ProximityPrompt") then
+                prompt = desc
+                break
+            end
+        end
+    end)
+    
+    if not prompt then
+        oldPrint("[FRUIT] ❌ Prompt not found!")
+        return false
+    end
+    
+    oldPrint("[FRUIT] 💰 Firing prompt...")
+    prompt.MaxActivationDistance = math.huge
+    fireproximityprompt(prompt)
+    task.wait(3)
+    
+    return true
+end
+
+local function getAnyFruitFromBackpack()
+    local backpack = player:FindFirstChild("Backpack")
+    local char = player.Character
+    
+    if backpack then
+        for _, tool in pairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("FruitData") then
+                oldPrint("[FRUIT] 📦 Found fruit in Backpack:", tool.Name)
+                return tool
+            end
+        end
+    end
+    
+    if char then
+        for _, tool in pairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool:FindFirstChild("FruitData") then
+                oldPrint("[FRUIT] 📦 Found fruit in Character:", tool.Name)
+                return tool
+            end
+        end
+    end
+    
+    return nil
+end
+
+local function eatFruit(fruitTool)
+    if not fruitTool then return end
+    
+    local fruitName = fruitTool.Name
+    oldPrint("[FRUIT] 🍽️ Eating fruit:", fruitName)
+    
+    local char = player.Character
+    local humanoid = char and char:FindFirstChild("Humanoid")
+    local backpack = player:FindFirstChild("Backpack")
+    
+    if humanoid and fruitTool.Parent == backpack then
+        oldPrint("[FRUIT] 📦 Equipping fruit...")
+        humanoid:EquipTool(fruitTool)
+        task.wait(0.5)
+    end
+    
+    oldPrint("[FRUIT] 🔨 Activating fruit to open ConfirmUI...")
+    pcall(function()
+        fruitTool:Activate()
+    end)
+    task.wait(1)
+    
+    local confirmUI = player.PlayerGui:FindFirstChild("ConfirmUI")
+    if confirmUI and confirmUI.Enabled then
+        oldPrint("[FRUIT] ✅ ConfirmUI found, clicking Yes...")
+        local yesButton = confirmUI:FindFirstChild("MainFrame")
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("ButtonsHolder")
+        end
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("Yes")
+        end
+        
+        if yesButton then
+            pcall(function()
+                for _, connection in pairs(getconnections(yesButton.MouseButton1Click)) do
+                    connection:Fire()
+                end
+            end)
+            oldPrint("[FRUIT] 🖱️ Clicked Yes button")
+        end
+    else
+        oldPrint("[FRUIT] ⚠️ No ConfirmUI, firing FruitAction remote directly...")
+        pcall(function()
+            RemoteEvents:WaitForChild("FruitAction"):FireServer("eat", fruitName)
+        end)
+    end
+    
+    task.wait(3)
+    
+    local fruitTool = nil
+    if backpack then
+        fruitTool = backpack:FindFirstChild(fruitName)
+    end
+    if not fruitTool and char then
+        fruitTool = char:FindFirstChild(fruitName)
+    end
+    
+    if fruitTool and fruitTool:FindFirstChild("FruitData") then
+        oldPrint("[FRUIT] ⚠️ Fruit still has FruitData - trying to destroy...")
+        pcall(function()
+            fruitTool:Destroy()
+        end)
+    else
+        oldPrint("[FRUIT] ✅ Ate fruit successfully:", fruitName)
+    end
+end
+
+local function allocateStatsPowerFirst()
+    print("[FRUIT] 📊 Allocating stats: Power first (11500), then Sword")
+    
+    local points = 0
+    pcall(function()
+        points = player.Data.StatPoints.Value or 0
+    end)
+    
+    if points <= 0 then
+        print("[FRUIT] ✅ No stat points to allocate")
+        return
+    end
+    
+    local powerStat = 0
+    pcall(function()
+        powerStat = player.Data.Power.Value or 0
+    end)
+    
+    if powerStat < 11500 then
+        local needed = 11500 - powerStat
+        local toAllocate = math.min(needed, points)
+        
+        print("[FRUIT] 🔥 Allocating", toAllocate, "points to Power (batch)")
+        local remaining = toAllocate
+        while remaining > 0 do
+            local batch = math.min(100, remaining)
+            pcall(function()
+                statRemote:FireServer("Power", batch)
+            end)
+            remaining = remaining - batch
+            task.wait(0.1)
+        end
+        
+        points = points - toAllocate
+    end
+    
+    if points > 0 then
+        print("[FRUIT] ⚔️ Allocating", points, "points to Sword (batch)")
+        local remaining = points
+        while remaining > 0 do
+            local batch = math.min(100, remaining)
+            pcall(function()
+                statRemote:FireServer("Sword", batch)
+            end)
+            remaining = remaining - batch
+            task.wait(0.1)
+        end
+    end
+    
+    print("[FRUIT] ✅ Stats allocated!")
+end
+
+local function fruitFarmLoop()
+    print("[FRUIT FARM] 🍎 Starting AFK Fruit Farm Loop...")
+    
+    local keyCodes = {Enum.KeyCode.Z, Enum.KeyCode.X, Enum.KeyCode.C, Enum.KeyCode.V}
+    
+    while _G.Config.FruitFarm and isFruitFarming do
+        task.wait(0.5)
+        
+        local char = player.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
+        if char.Humanoid.Health <= 0 then continue end
+        
+        local hrp = char.HumanoidRootPart
+        local lockPos = _G.Config.FruitFarmPos
+        
+        if (hrp.Position - lockPos.Position).Magnitude > 5 then
+            hrp.CFrame = lockPos
+        end
+        
+        local targetFruit = _G.Config.TargetFruit
+        equipFruit(targetFruit)
+        
+        pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
+        pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
+        
+        for i, keyCode in ipairs(keyCodes) do
+            pcall(function()
+                local args = {
+                    "UseAbility",
+                    {
+                        TargetPosition = hrp.Position,
+                        FruitPower = targetFruit,
+                        KeyCode = keyCode
+                    }
+                }
+                RemoteEvents:WaitForChild("FruitPowerRemote"):FireServer(unpack(args))
+            end)
+            task.wait(0.3)
+        end
+        
+        task.wait(1.5)
+    end
+    
+    print("[FRUIT FARM] ❌ Fruit Farm Loop ended")
+end
+
+local function startFruitFarm()
+    oldPrint("[FRUIT] ========== FRUIT FARM START ==========")
+    isFruitFarming = true
+    
+    local targetFruit = _G.Config.TargetFruit
+    
+    oldPrint("[FRUIT] STEP 1: checkHasFruit...")
+    local hasFruitAlready = checkHasFruit(targetFruit)
+    oldPrint("[FRUIT] STEP 1 result:", tostring(hasFruitAlready))
+    
+    if hasFruitAlready then
+        oldPrint("[FRUIT] ✅ Already have", targetFruit)
+        
+        local fruitTool = getAnyFruitFromBackpack()
+        if fruitTool then
+            oldPrint("[FRUIT] 🍽️ Eating target fruit before farming:", fruitTool.Name)
+            eatFruit(fruitTool)
+            task.wait(2)
+        else
+            oldPrint("[FRUIT] ⚠️ No fruit tool found in Backpack/Character!")
+        end
+        
+        equipFruit(targetFruit)
+        
+        oldPrint("[FRUIT] STEP 6: Teleporting to farm position...")
+        local island = _G.Config.FruitFarmIsland
+        local pos = _G.Config.FruitFarmPos
+        
+        pcall(function()
+            tpRemote:FireServer(island)
+        end)
+        task.wait(3)
+        
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            for i = 1, 10 do
+                char.HumanoidRootPart.CFrame = pos
+                task.wait(0.1)
+            end
+        end
+        
+        oldPrint("[FRUIT] ✅ Fruit farm setup complete!")
+        task.spawn(fruitFarmLoop)
+        return true
+    end
+    
+    local currentPower = 0
+    pcall(function()
+        currentPower = player.Data.Power.Value or 0
+    end)
+    
+    if currentPower < 11500 then
+        oldPrint("[FRUIT] STEP 2: Reset Stats (Power < 11500)...")
+        pcall(function()
+            RemoteEvents:WaitForChild("ResetStats"):FireServer()
+        end)
+        task.wait(3)
+        oldPrint("[FRUIT] STEP 2: Reset Stats done")
+        
+        oldPrint("[FRUIT] STEP 3: Allocate Stats...")
+        local ok3, err3 = pcall(allocateStatsPowerFirst)
+        if not ok3 then
+            oldPrint("[FRUIT] STEP 3 ERROR:", tostring(err3))
+        else
+            oldPrint("[FRUIT] STEP 3: Stats allocated OK")
+        end
+        task.wait(2)
+    else
+        oldPrint("[FRUIT] ⏭️ STEP 2-3: Power already >= 11500, skipping reset...")
+    end
+    
+    oldPrint("[FRUIT] STEP 4: Starting buy loop...")
+    local maxAttempts = 100
+    local attemptNum = 0
+    local gotTarget = false
+    
+    while maxAttempts > 0 and not gotTarget do
+        maxAttempts = maxAttempts - 1
+        attemptNum = attemptNum + 1
+        oldPrint("[FRUIT] ══════════════════════════════════")
+        oldPrint("[FRUIT] 🎲 Attempt " .. attemptNum .. " / 100")
+        
+        local ok4, err4 = pcall(buyRandomFruit)
+        if not ok4 then
+            oldPrint("[FRUIT] ❌ buyRandomFruit ERROR:", tostring(err4))
+            task.wait(2)
+        else
+            oldPrint("[FRUIT] ⏳ Waiting for fruit to load into Backpack...")
+            task.wait(3)
+            local fruitTool = getAnyFruitFromBackpack()
+            
+            if fruitTool then
+                oldPrint("[FRUIT] 🍎 Got: " .. fruitTool.Name)
+                
+                local isTargetFruit = fruitTool.Name:find(targetFruit) ~= nil
+                
+                if isTargetFruit then
+                    oldPrint("[FRUIT] 🎉🎉🎉 GOT TARGET FRUIT: " .. fruitTool.Name .. " !!! 🎉🎉🎉")
+                    oldPrint("[FRUIT] 🍽️ Eating target fruit...")
+                    eatFruit(fruitTool)
+                    task.wait(2)
+                    gotTarget = true
+                else
+                    oldPrint("[FRUIT] ❌ Not " .. targetFruit .. " → Eating " .. fruitTool.Name .. "...")
+                    eatFruit(fruitTool)
+                    task.wait(2)
+                end
+            else
+                oldPrint("[FRUIT] ⚠️ No fruit found in Backpack after buying!")
+                task.wait(2)
+            end
+        end
+    end
+    
+    oldPrint("[FRUIT] STEP 5: Check final result...")
+    if checkHasFruit(targetFruit) then
+        oldPrint("[FRUIT] ✅ Got " .. targetFruit .. "! Equipping...")
+        equipFruit(targetFruit)
+        
+        oldPrint("[FRUIT] STEP 6: Teleporting to farm position...")
+        local island = _G.Config.FruitFarmIsland
+        local pos = _G.Config.FruitFarmPos
+        
+        pcall(function()
+            tpRemote:FireServer(island)
+        end)
+        task.wait(3)
+        
+        local char = player.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            for i = 1, 10 do
+                char.HumanoidRootPart.CFrame = pos
+                task.wait(0.1)
+            end
+        end
+        
+        oldPrint("[FRUIT] ✅ Fruit farm setup complete!")
+        task.spawn(fruitFarmLoop)
+        return true
+    else
+        oldPrint("[FRUIT] ❌ Failed to get " .. targetFruit)
+        isFruitFarming = false
+        return false
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [11] ARTIFACTS UNLOCK SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+local function checkArtifactsUnlocked()
+    local unlocked = false
+    pcall(function()
+        local data = RS:WaitForChild("RemoteFunctions"):WaitForChild("GetArtifactData"):InvokeServer()
+        if data and type(data) == "table" and data.Unlocked == true then
+            unlocked = true
+            print("[ARTIFACTS] ✅ Already unlocked")
+        else
+            print("[ARTIFACTS] ❌ Not unlocked yet")
+        end
+    end)
+    return unlocked
+end
+
+local function unlockArtifacts()
+    print("[ARTIFACTS] ========== UNLOCK ARTIFACTS START ==========")
+    
+    if checkArtifactsUnlocked() then
+        print("[ARTIFACTS] ⏭️ Already unlocked, skipping...")
+        return true
+    end
+    
+    print("[ARTIFACTS] 📍 Teleporting to ArtifactsUnlocker NPC...")
+    local npcCFrame = CFrame.new(-440.516388, 1.77979147, -1095.86072, -0.289305925, -0, -0.957236767, 0, 1, -0, 0.957236767, 0, -0.289305925)
+    
+    tweenPos(npcCFrame)
+    task.wait(3)
+    
+    print("[ARTIFACTS] 🔍 Finding ArtifactPrompt...")
+    local npc = workspace:FindFirstChild("ServiceNPCs")
+    if npc then
+        npc = npc:FindFirstChild("ArtifactsUnlocker")
+    end
+    if npc then
+        npc = npc:FindFirstChild("HumanoidRootPart")
+    end
+    
+    local prompt = nil
+    if npc then
+        prompt = npc:FindFirstChild("ArtifactPrompt")
+    end
+    
+    if not prompt then
+        print("[ARTIFACTS] ❌ ArtifactPrompt not found!")
+        return false
+    end
+    
+    print("[ARTIFACTS] 💰 Firing ArtifactPrompt...")
+    prompt.MaxActivationDistance = math.huge
+    fireproximityprompt(prompt)
+    task.wait(2)
+    
+    print("[ARTIFACTS] ⏳ Waiting for ConfirmUI...")
+    task.wait(1)
+    
+    local confirmUI = player.PlayerGui:FindFirstChild("ConfirmUI")
+    if confirmUI and confirmUI.Enabled then
+        print("[ARTIFACTS] ✅ ConfirmUI found, clicking Yes...")
+        local yesButton = confirmUI:FindFirstChild("MainFrame")
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("ButtonsHolder")
+        end
+        if yesButton then
+            yesButton = yesButton:FindFirstChild("Yes")
+        end
+        
+        if yesButton then
+            pcall(function()
+                for _, connection in pairs(getconnections(yesButton.MouseButton1Click)) do
+                    connection:Fire()
+                end
+            end)
+            print("[ARTIFACTS] 🖱️ Clicked Yes button")
+        end
+    else
+        print("[ARTIFACTS] ⚠️ No ConfirmUI, firing ArtifactUnlockSystem remote...")
+        pcall(function()
+            RemoteEvents:WaitForChild("ArtifactUnlockSystem"):FireServer()
+        end)
+    end
+    
+    task.wait(3)
+    
+    if checkArtifactsUnlocked() then
+        print("[ARTIFACTS] ✅ Artifacts unlocked successfully!")
+        return true
+    else
+        print("[ARTIFACTS] ❌ Failed to unlock Artifacts")
+        return false
+    end
+end
+
+local function equipArtifacts()
+    oldPrint("[ARTIFACTS] 🎯 Equipping Artifacts...")
+    
+    pcall(function()
+        RemoteEvents:WaitForChild("ArtifactUIOpened"):FireServer()
+    end)
+    oldPrint("[ARTIFACTS] 📂 Opened Artifact UI")
+    task.wait(2)
+    
+    local data = nil
+    local ok, err = pcall(function()
+        data = RS:WaitForChild("RemoteFunctions"):WaitForChild("GetArtifactData"):InvokeServer()
+    end)
+    oldPrint("[ARTIFACTS] 📡 GetArtifactData ok:", tostring(ok), "err:", tostring(err))
+    
+    if data and type(data) == "table" then
+        local allIds = {}
+        local function deepScan(tbl, prefix)
+            for k, v in pairs(tbl) do
+                local key = prefix .. tostring(k)
+                if type(v) == "table" then
+                    oldPrint("[ARTIFACTS] 📊 " .. key .. " = {table}")
+                    deepScan(v, key .. ".")
+                else
+                    oldPrint("[ARTIFACTS] 📊 " .. key .. " = " .. tostring(v))
+                    if type(v) == "string" and v:match("%x%x%x%x%x%x%x%x%-%x%x%x%x") then
+                        table.insert(allIds, v)
+                        oldPrint("[ARTIFACTS] 🔑 Found UUID: " .. v)
+                    end
+                end
+            end
+        end
+        deepScan(data, "")
+        
+        oldPrint("[ARTIFACTS] 🔑 Total UUIDs found: " .. #allIds)
+        for i, uuid in ipairs(allIds) do
+            pcall(function()
+                RemoteEvents:WaitForChild("ArtifactEquip"):FireServer(uuid)
+            end)
+            oldPrint("[ARTIFACTS] ✅ Equipped #" .. i .. ": " .. uuid)
+            task.wait(0.5)
+        end
+    else
+        oldPrint("[ARTIFACTS] ⚠️ No artifact data, type:", type(data))
+    end
+    
+    task.wait(1)
+    
+    pcall(function()
+        local artifactsUI = player.PlayerGui:FindFirstChild("ArtifactsUI")
+        if artifactsUI then
+            local mainFrame = artifactsUI:FindFirstChild("ArtifactsMainFrame")
+            if mainFrame then
+                local closeHolder = mainFrame:FindFirstChild("CloseButtonFrameHolder")
+                if closeHolder then
+                    for _, btn in pairs(closeHolder:GetDescendants()) do
+                        if btn:IsA("TextButton") or btn:IsA("ImageButton") then
+                            oldPrint("[ARTIFACTS] 🔒 Clicking close button:", btn.Name)
+                            pcall(function()
+                                for _, conn in pairs(getconnections(btn.MouseButton1Click)) do
+                                    conn:Fire()
+                                end
+                            end)
+                            break
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    task.wait(0.5)
+    
+    pcall(function()
+        RemoteEvents:WaitForChild("ArtifactCloseUI"):FireServer()
+    end)
+    pcall(function()
+        local artifactsUI = player.PlayerGui:FindFirstChild("ArtifactsUI")
+        if artifactsUI then
+            artifactsUI.Enabled = false
+            oldPrint("[ARTIFACTS] 🔒 Force disabled ArtifactsUI")
+        end
+    end)
+    
+    oldPrint("[ARTIFACTS] ✅ Closed Artifact UI")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [12] OBSERVATION HAKI BUY SYSTEM (Level 6000+)
+-- ═══════════════════════════════════════════════════════════════
+local function checkHasObservationHaki()
+    local hasObs = false
+    pcall(function()
+        local data = RemoteEvents:WaitForChild("HakiRemote"):FireServer("GetProgression")
+        local statsUI = player.PlayerGui:FindFirstChild("StatsPanelUI")
+        if statsUI then
+            for _, desc in pairs(statsUI:GetDescendants()) do
+                if desc.Name:find("Observation") and desc:IsA("Frame") and desc.Visible == true then
+                    hasObs = true
+                    break
+                end
+            end
+        end
+    end)
+    
+    if not hasObs then
+        pcall(function()
+            RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle")
+            task.wait(0.3)
+            RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle")
+            local char = player.Character
+            if char then
+                for _, v in pairs(char:GetDescendants()) do
+                    if v.Name:find("Observation") or v.Name:find("observation") then
+                        hasObs = true
+                        break
+                    end
+                end
+            end
+        end)
+    end
+    
+    oldPrint("[OBS HAKI] Check hasObservationHaki:", tostring(hasObs))
+    return hasObs
+end
+
+local function buyObservationHaki()
+    oldPrint("[OBS HAKI] ========== BUY OBSERVATION HAKI START ==========")
+    
+    if checkHasObservationHaki() then
+        oldPrint("[OBS HAKI] ⏭️ Already have Observation Haki, skipping...")
+        return true
+    end
+    
+    oldPrint("[OBS HAKI] 📍 Teleporting to ObservationBuyer NPC...")
+    local npcCFrame = CFrame.new(-713.182922, 12.1339779, -527.289795, -0.763382077, 0, 0.645947695, 0, 1, 0, -0.645947695, 0, -0.763382077)
+    
+    tweenPos(npcCFrame)
+    task.wait(3)
+    
+    oldPrint("[OBS HAKI] 🔍 Finding ObservationHakiPrompt...")
+    local npc = workspace:FindFirstChild("ServiceNPCs")
+    if npc then npc = npc:FindFirstChild("ObservationBuyer") end
+    if npc then npc = npc:FindFirstChild("HumanoidRootPart") end
+    
+    local prompt = nil
+    if npc then
+        prompt = npc:FindFirstChild("ObservationHakiPrompt")
+    end
+    
+    if not prompt then
+        oldPrint("[OBS HAKI] ❌ ObservationHakiPrompt not found!")
+        return false
+    end
+    
+    oldPrint("[OBS HAKI] 💰 Firing ObservationHakiPrompt...")
+    prompt.MaxActivationDistance = math.huge
+    fireproximityprompt(prompt)
+    task.wait(2)
+    
+    oldPrint("[OBS HAKI] ⏳ Waiting for ConfirmUI...")
+    task.wait(1)
+    
+    local confirmUI = player.PlayerGui:FindFirstChild("ConfirmUI")
+    if confirmUI and confirmUI.Enabled then
+        oldPrint("[OBS HAKI] ✅ ConfirmUI found, clicking Yes...")
+        local yesButton = confirmUI:FindFirstChild("MainFrame")
+        if yesButton then yesButton = yesButton:FindFirstChild("ButtonsHolder") end
+        if yesButton then yesButton = yesButton:FindFirstChild("Yes") end
+        
+        if yesButton then
+            pcall(function()
+                for _, connection in pairs(getconnections(yesButton.MouseButton1Click)) do
+                    connection:Fire()
+                end
+            end)
+            oldPrint("[OBS HAKI] 🖱️ Clicked Yes button")
+        end
+    else
+        oldPrint("[OBS HAKI] ⚠️ No ConfirmUI found")
+    end
+    
+    task.wait(3)
+    
+    oldPrint("[OBS HAKI] ✅ Observation Haki purchase attempted!")
+    return true
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [13] BOSS KEY AUTO BUY SYSTEM (Real-time Stock Update)
+-- ═══════════════════════════════════════════════════════════════
+local lastBossKeyBuyTime = 0
+local isBuyingBossKey = false
+
+local function buyBossKeysFromStock(bossKeyStock)
+    if isBuyingBossKey then
+        oldPrint("[BOSS KEY] ⏰ Already buying, skipping...")
+        return false
+    end
+    
+    local currentTime = tick()
+    if currentTime - lastBossKeyBuyTime < 5 then
+        return false
+    end
+    
+    isBuyingBossKey = true
+    oldPrint("[BOSS KEY] ========== AUTO BUY BOSS KEY START ==========")
+    oldPrint(string.format("[BOSS KEY] 🔑 Boss Key in stock: %d", bossKeyStock))
+    
+    local merchantCF = CFrame.new(368.817719, 2.79983521, 783.589844, -0.0566431284, 0, 0.998394549, 0, 1, 0, -0.998394549, 0, -0.0566431284)
+    oldPrint("[BOSS KEY] 📍 Teleporting to MerchantNPC...")
+    tweenPos(merchantCF)
+    task.wait(3)
+    
+    oldPrint(string.format("[BOSS KEY] 💰 Buying %d Boss Keys...", bossKeyStock))
+    for i = 1, bossKeyStock do
+        pcall(function()
+            RS.Remotes.MerchantRemotes.PurchaseMerchantItem:InvokeServer("Boss Key", 1)
+        end)
+        task.wait(0.5)
+    end
+    
+    lastBossKeyBuyTime = currentTime
+    isBuyingBossKey = false
+    oldPrint("[BOSS KEY] ✅ Boss Key purchase complete!")
+    oldPrint("[BOSS KEY] ========== AUTO BUY BOSS KEY END ==========")
+    return true
+end
+
+local function setupBossKeyAutoListener()
+    oldPrint("[BOSS KEY] 🎧 Setting up real-time stock listener...")
+    
+    task.spawn(function()
+        task.wait(2)
+        oldPrint("[BOSS KEY] 📦 Checking initial stock...")
+        local success, stock = pcall(function()
+            return RS.Remotes.MerchantRemotes.GetMerchantStock:InvokeServer()
+        end)
+        
+        if success then
+            oldPrint(string.format("[BOSS KEY] 📋 Stock type: %s", type(stock)))
+            if type(stock) == "table" then
+                local items = stock.stock or stock
+                if type(items) == "table" then
+                    for key, item in pairs(items) do
+                        if type(item) == "table" then
+                            local itemName = item.name or item.itemId or tostring(key)
+                            local itemStock = item.stock or item.quantity or 0
+                            if itemName == "Boss Key" or (type(itemName) == "string" and string.find(itemName, "Boss Key")) then
+                                oldPrint(string.format("[BOSS KEY] 🔑 Boss Key found! Stock: %d", itemStock))
+                                if itemStock > 0 then
+                                    buyBossKeysFromStock(itemStock)
+                                end
+                                break
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end)
+    
+    pcall(function()
+        RS.Remotes.MerchantRemotes.MerchantStockUpdate.OnClientEvent:Connect(function(...)
+            if not _G.Config.AutoBuyBossKey then return end
+            local args = {...}
+            for i, arg in ipairs(args) do
+                if type(arg) == "table" then
+                    for _, item in pairs(arg) do
+                        if type(item) == "table" and (item.name == "Boss Key" or item.itemId == "Boss Key") then
+                            local stock = item.stock or item.quantity or 0
+                            if stock > 0 then
+                                task.spawn(function()
+                                    buyBossKeysFromStock(stock)
+                                end)
+                            end
+                            return
+                        end
+                    end
+                end
+            end
+        end)
+    end)
+    
+    oldPrint("[BOSS KEY] ✅ Real-time stock listener ready!")
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [14] ICHIGO EXCHANGE SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+local function checkIchigoRequirements()
+    local bossTicketCount = inventoryByRarity["Epic"]["Boss Ticket"] or 0
+    if bossTicketCount == 0 then
+        pcall(function() RS.Remotes.RequestInventory:FireServer() end)
+        task.wait(1)
+        bossTicketCount = inventoryByRarity["Epic"]["Boss Ticket"] or 0
+    end
+    
+    local hasAllItems = bossTicketCount >= 500
+    local missingItems = {}
+    if not hasAllItems then
+        table.insert(missingItems, string.format("Boss Ticket: %d / 500", bossTicketCount))
+    end
+    return hasAllItems, missingItems
+end
+
+local function exchangeIchigo()
+    oldPrint("[ICHIGO] ========== EXCHANGE ICHIGO START ==========")
+    
+    if checkDarkBlade("Ichigo") then
+        oldPrint("[ICHIGO] ⏭️ Already have Ichigo, skipping...")
+        return true
+    end
+    
+    local hasAll, missing = checkIchigoRequirements()
+    if not hasAll then
+        oldPrint("[ICHIGO] ❌ Missing requirements:")
+        for _, item in pairs(missing) do
+            oldPrint("[ICHIGO]   - " .. item)
+        end
+        oldPrint("[ICHIGO] 🎯 Farm Saber Boss to get Boss Tickets!")
+        return false
+    end
+    
+    oldPrint("[ICHIGO] ✅ All requirements met (Boss Ticket: 500)! Exchanging...")
+    local success = pcall(function()
+        RS.Remotes.ExchangeItem:InvokeServer("Ichigo")
+    end)
+    if not success then
+        oldPrint("[ICHIGO] ❌ Failed to call ExchangeItem remote")
+        return false
+    end
+    task.wait(3)
+    
+    if checkDarkBlade("Ichigo") then
+        oldPrint("[ICHIGO] ✅ Ichigo exchange successful!")
+        return true
+    else
+        oldPrint("[ICHIGO] ⚠️ Ichigo not found in inventory after exchange")
+        return false
+    end
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- [15] SABER BOSS FARM SYSTEM
+-- ═══════════════════════════════════════════════════════════════
+local function checkBossKeyCount()
+    pcall(function() RS.Remotes.RequestInventory:FireServer() end)
+    task.wait(1)
+    local count = inventoryByRarity["Epic"]["Boss Key"] or 0
+    oldPrint(string.format("[SABER BOSS] 🔑 Boss Key: %d", count))
+    return count
+end
+
+local function farmSaberBoss()
+    oldPrint("[SABER BOSS] ========== FARM SABER BOSS START ==========")
+    isFarmingIchigoBoss = true
+    
+    while isFarmingIchigoBoss do
+        local bossKeyCount = checkBossKeyCount()
+        oldPrint(string.format("[SABER BOSS] 🎫 Boss Key: %d", bossKeyCount))
+        if bossKeyCount < 1 then
+            oldPrint("[SABER BOSS] ❌ Not enough Boss Keys! Need 1 to summon.")
+            break
+        end
+        
+        local summonNPCCFrame = CFrame.new(651.810181, -3.67419362, -1021.13123, 0.999550879, 0, 0.0299676117, 0, 1, 0, -0.0299676117, 0, 0.999550879)
+        oldPrint("[SABER BOSS] 📍 Teleporting to SummonBossNPC...")
+        tweenPos(summonNPCCFrame)
+        task.wait(3)
+        
+        oldPrint("[SABER BOSS] 🔔 Summoning SaberBoss...")
+        local success = pcall(function()
+            RS.Remotes.RequestSummonBoss:FireServer("SaberBoss")
+        end)
+        if not success then
+            pcall(function()
+                RS.Remotes.RequestAutoSpawn:FireServer("SaberBoss")
+            end)
+        end
+        task.wait(5)
+        
+        oldPrint("[SABER BOSS] 🔍 Finding SaberBoss...")
+        local boss = workspace:FindFirstChild("NPCs")
+        if boss then boss = boss:FindFirstChild("SaberBoss") end
+        if not boss then
+            oldPrint("[SABER BOSS] ❌ SaberBoss not found! Waiting...")
+            task.wait(10)
+            boss = workspace:FindFirstChild("NPCs")
+            if boss then boss = boss:FindFirstChild("SaberBoss") end
+        end
+        
+        if boss and boss:FindFirstChild("HumanoidRootPart") and boss:FindFirstChild("Humanoid") then
+            oldPrint("[SABER BOSS] ✅ SaberBoss found! Starting combat...")
+            
+            local char = player.Character
+            if not char or not char:FindFirstChild("HumanoidRootPart") then
+                oldPrint("[SABER BOSS] ❌ Character not found!")
+                return
+            end
+            
+            local tool = findDarkBladeInHand()
+            if not tool then
+                equipDarkBladeFromInventory()
+                tool = findDarkBladeInHand()
+            end
+            if tool and tool.Parent == player.Backpack then
+                char.Humanoid:EquipTool(tool)
+            end
+            
+            local bossRoot = boss.HumanoidRootPart
+            local bossHumanoid = boss.Humanoid
+            local YPOS = 15
+            local skillIndex = 1
+            
+            repeat task.wait()
+                if not boss or not boss.Parent or not boss:FindFirstChild("HumanoidRootPart") or bossHumanoid.Health <= 0 then
+                    break
+                end
+                if not char or not char:FindFirstChild("HumanoidRootPart") then break end
+                if char.Humanoid.Health <= 0 then break end
+                
+                local tool = findDarkBladeInHand()
+                if not tool then
+                    equipDarkBladeFromInventory()
+                    tool = findDarkBladeInHand()
+                end
+                if tool and tool.Parent == player.Backpack then
+                    char.Humanoid:EquipTool(tool)
+                end
+                
+                BodyVelocity.Velocity = Vector3.zero
+                BodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                BodyVelocity.Parent = char.HumanoidRootPart
+                
+                local success, owner = pcall(function()
+                    return bossRoot:GetNetworkOwner()
+                end)
+                if success and owner == player then
+                    bossRoot.CFrame = CFrame.new(bossRoot.Position)
+                    bossRoot.AssemblyLinearVelocity = Vector3.zero
+                    bossRoot.AssemblyAngularVelocity = Vector3.zero
+                end
+                
+                tweenPos(
+                    CFrame.new(bossRoot.Position + Vector3.new(0, YPOS, 0)) * CFrame.Angles(math.rad(-90), 0, 0),
+                    function()
+                        pcall(function()
+                            local tool = char:FindFirstChildWhichIsA("Tool")
+                            if tool then tool:Activate() end
+                        end)
+                        hitRemote:FireServer()
+                    end
+                )
+                
+                pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
+                pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
+                
+                pcall(function()
+                    RS:WaitForChild("AbilitySystem"):WaitForChild("Remotes"):WaitForChild("RequestAbility"):FireServer(skillIndex)
+                end)
+                pcall(function()
+                    local tool = char:FindFirstChildWhichIsA("Tool")
+                    if tool then tool:Activate() end
+                end)
+                hitRemote:FireServer()
+                
+                skillIndex = skillIndex + 1
+                if skillIndex > 4 then skillIndex = 1 end
+                
+            until not boss.Parent or bossHumanoid.Health <= 0 or char.Humanoid.Health <= 0
+            
+            local bossStillAlive = boss and boss.Parent and boss:FindFirstChild("HumanoidRootPart") and bossHumanoid.Health > 0
+            if bossStillAlive then
+                oldPrint("[SABER BOSS] ⚠️ Player died! Waiting for respawn...")
+                task.wait(5)
+                if boss and boss.Parent and boss:FindFirstChild("HumanoidRootPart") and bossHumanoid.Health > 0 then
+                    local newChar = player.Character or player.CharacterAdded:Wait()
+                    if newChar and newChar:FindFirstChild("HumanoidRootPart") then
+                        oldPrint("[SABER BOSS] 🔄 Respawned! Returning to boss...")
+                        local bossPos = boss.HumanoidRootPart.Position
+                        tweenPos(CFrame.new(bossPos + Vector3.new(0, 15, 0)))
+                        task.wait(3)
+                    end
+                else
+                    oldPrint("[SABER BOSS] ⚠️ Boss died while waiting for respawn!")
+                end
+            else
+                oldPrint("[SABER BOSS] ✅ SaberBoss defeated!")
+                task.wait(2)
+                oldPrint("[SABER BOSS] 🔄 Checking Boss Keys for next round...")
+            end
+        else
+            oldPrint("[SABER BOSS] ❌ SaberBoss not spawned or already dead!")
+            task.wait(5)
+        end
+    end
+    
+    isFarmingIchigoBoss = false
+    oldPrint("[SABER BOSS] ========== FARM SABER BOSS END ==========")
+end
 -- ═══════════════════════════════════════════════════════════════
 -- [16] HAKI QUEST SYSTEM
 -- ═══════════════════════════════════════════════════════════════
@@ -888,14 +2245,11 @@ local function acceptHakiQuest()
     local hakiPos = Vector3.new(-497.94, 23.66, -1252.64)
 
     pcall(function()
-        if not player or not player.PlayerGui then return end
         local questUI = player.PlayerGui:FindFirstChild("QuestUI")
         if questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible then
-            local ok, title = pcall(function()
-                return questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
-            end)
-            if ok and title and not title:find("Path to Haki") then
-                safeFire(abandonRemote or "QuestAbandon", "repeatable")
+            local title = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+            if not title:find("Path to Haki") then
+                abandonRemote:FireServer("repeatable")
                 task.wait(2)
             else
                 return
@@ -903,18 +2257,18 @@ local function acceptHakiQuest()
         end
     end)
 
-    pcall(function() tweenPos(CFrame.new(hakiPos)) end)
+    tweenPos(CFrame.new(hakiPos))
     task.wait(2)
-    safeFire(questRemote or "QuestAccept", "HakiQuestNPC")
+    pcall(function() questRemote:FireServer("HakiQuestNPC") end)
     task.wait(2)
 end
 
 local function goToHakiNPC()
     local hakiPos = Vector3.new(-497.94, 23.66, -1252.64)
-    pcall(function() tweenPos(CFrame.new(hakiPos)) end)
+    tweenPos(CFrame.new(hakiPos))
     task.wait(4)
 
-    local char = player and player.Character
+    local char = player.Character
 
     for i = 1, 5 do
         print("[HAKI QUEST] Press E attempt", i)
@@ -924,13 +2278,12 @@ local function goToHakiNPC()
             end
         end)
         task.wait(0.5)
-        safeSendKeyEvent(true, Enum.KeyCode.E, false, game)
+        VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game)
         task.wait(0.1)
-        safeSendKeyEvent(false, Enum.KeyCode.E, false, game)
+        VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
         task.wait(2)
 
-        local ok, haki = pcall(function() return checkHakiStatus and checkHakiStatus() end)
-        if ok and haki then
+        if checkHakiStatus() then
             print("[HAKI QUEST] 🎉 Haki obtained via E key!")
             return true
         end
@@ -946,25 +2299,39 @@ local function farmThiefForHaki()
     local killCount = 0
     local lastCheckKills = 0
 
-    safeFire(tpRemote or "TeleportToPortal", "Starter")
+    pcall(function()
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
+        if questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible then
+            local title = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text
+            if not title:find("Path to Haki") then
+                abandonRemote:FireServer("repeatable")
+                task.wait(2)
+            end
+            local desc = questUI.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
+            local name = desc:match("Defeat the (%w+)") or desc:match("defeat (%w+)")
+            if name then targetNPC = name end
+        end
+    end)
+
+    pcall(function() tpRemote:FireServer("Starter") end)
     task.wait(3)
 
     local farmStart = tick()
 
     while task.wait(0.5) do
         if not isHakiQuestActive then break end
-        if tick() - farmStart > (_G.Config.HakiTimeout or 3600) then
+        if tick() - farmStart > _G.Config.HakiTimeout then
             print("[HAKI QUEST] ⚠️ Timeout!")
             isHakiQuestActive = false
             break
         end
 
-        local char = player and player.Character
+        local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-        if char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0 then continue end
+        if char.Humanoid.Health <= 0 then continue end
 
         local shouldGoToNPC = false
-        local questUI = player and player.PlayerGui and player.PlayerGui:FindFirstChild("QuestUI")
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
         local questVisible = questUI and questUI:FindFirstChild("Quest") and questUI.Quest.Visible
 
         if questVisible then
@@ -998,7 +2365,7 @@ local function farmThiefForHaki()
                 if _G.Config.BuyDarkBlade then
                     print("[HAKI QUEST] 🛒 Buying Dark Blade...")
                     isHakiQuestActive = false
-                    pcall(function() if type(buyDarkBlade) == "function" then buyDarkBlade() end end)
+                    pcall(buyDarkBlade)
                 end
 
                 print("[HAKI QUEST] ✅ Complete!")
@@ -1006,35 +2373,31 @@ local function farmThiefForHaki()
             end
 
             pcall(function()
-                local q = player and player.PlayerGui and player.PlayerGui:FindFirstChild("QuestUI")
+                local q = player.PlayerGui:FindFirstChild("QuestUI")
                 if q and q:FindFirstChild("Quest") and q.Quest.Visible then
-                    local ok, desc = pcall(function()
-                        return q.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
-                    end)
-                    if ok and desc then
-                        local name = desc:match("Defeat the (%w+)") or desc:match("defeat (%w+)")
-                        if name then targetNPC = name; print("[HAKI QUEST] New target:", targetNPC) end
-                    end
+                    local desc = q.Quest.Quest.Holder.Content.QuestInfo.QuestDescription.Text
+                    local name = desc:match("Defeat the (%w+)") or desc:match("defeat (%w+)")
+                    if name then targetNPC = name; print("[HAKI QUEST] New target:", targetNPC) end
                 end
             end)
 
-            safeFire(tpRemote or "TeleportToPortal", "Starter")
+            pcall(function() tpRemote:FireServer("Starter") end)
             task.wait(3)
             continue
         end
 
         local npcFound = false
         for i = 1, 5 do
-            local npc = workspace:FindFirstChild("NPCs") and workspace.NPCs:FindFirstChild(targetNPC .. i)
+            local npc = workspace.NPCs:FindFirstChild(targetNPC .. i)
             if npc and npc:FindFirstChild("Humanoid") and npc.Humanoid.Health > 0 then
                 npcFound = true
                 local target = npc:FindFirstChild("HumanoidRootPart")
                 if target then
                     while npc.Parent and npc.Humanoid.Health > 0 do
                         if not char or not char:FindFirstChild("HumanoidRootPart") then break end
-                        if char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0 then break end
+                        if char.Humanoid.Health <= 0 then break end
                         pcall(function() char.HumanoidRootPart.CFrame = target.CFrame * CFrame.new(0, 0, 5) end)
-                        pcall(function() if hitRemote and hitRemote.FireServer then hitRemote:FireServer() end end)
+                        pcall(function() hitRemote:FireServer() end)
                         task.wait(0.3)
                     end
                     killCount = killCount + 1
@@ -1058,26 +2421,23 @@ end
 -- [17] NORMAL QUEST FARM (ปรับใช้ Melee+Skill)
 -- ═══════════════════════════════════════════════════════════════
 local function selectWeapon()
-    local ok, blade = pcall(findDarkBladeInHand)
-    if ok and blade then return "Dark Blade" end
-    if type(equipDarkBladeFromInventory) == "function" then
-        local ok2, res = pcall(equipDarkBladeFromInventory)
-        if ok2 and res then return "Dark Blade" end
-    end
+    local blade = findDarkBladeInHand()
+    if blade then return "Dark Blade" end
+    if equipDarkBladeFromInventory() then return "Dark Blade" end
     return getBestWeapon()
 end
 
 local function equipToolByName(toolName, char)
     local tool = nil
     if toolName == "Dark Blade" then
-        local ok, blade = pcall(findDarkBladeInHand)
-        if ok then tool = blade end
+        tool = findDarkBladeInHand()
     else
-        tool = (player and player.Backpack and player.Backpack:FindFirstChild(toolName)) or (char and char:FindFirstChild(toolName))
+        tool = player.Backpack:FindFirstChild(toolName) or char:FindFirstChild(toolName)
     end
 
-    if tool and char and char:FindFirstChild("Humanoid") then
-        pcall(function() char.Humanoid:EquipTool(tool) end)
+    if tool and tool.Parent == player.Backpack then
+        print("[FARM] Equipping:", tool.Name)
+        char.Humanoid:EquipTool(tool)
     end
     return tool
 end
@@ -1091,21 +2451,23 @@ local function farmLoop()
             continue
         end
 
-        local char = player and player.Character
+        local char = player.Character
         if not char or not char:FindFirstChild("HumanoidRootPart") then continue end
-        if char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0 then continue end
+        if char.Humanoid.Health <= 0 then continue end
 
         local questInfo = getQuestInfo()
         if not questInfo then continue end
 
-        local questUI = player and player.PlayerGui and player.PlayerGui:FindFirstChild("QuestUI")
+        local questUI = player.PlayerGui:FindFirstChild("QuestUI")
         if not questUI then continue end
 
-        if not (questUI.Quest and questUI.Quest.Visible) then
-            if type(_G.SmartTP) == "function" then pcall(_G.SmartTP, questInfo.position) end
-            safeFire(questRemote or "QuestAccept", questInfo.npcName)
-        elseif (questUI.Quest and questUI.Quest.Quest and questUI.Quest.Quest.Holder and questUI.Quest.Quest.Holder.Content and questUI.Quest.Quest.Holder.Content.QuestInfo and questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle and questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle and questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle) then
-            safeFire(abandonRemote or "QuestAbandon", "repeatable")
+        if not questUI.Quest.Visible then
+            _G.SmartTP(questInfo.position)
+            questRemote:FireServer(questInfo.npcName)
+
+        elseif questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle then
+            abandonRemote:FireServer("repeatable")
+
         else
             local toolName = selectWeapon()
             local npcType = getNpcType(questInfo.npcName)
@@ -1117,8 +2479,8 @@ local function farmLoop()
             local firstMob = true
 
             while _G.Config.AutoFarm do
-                if char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0 then break end
-                if not (questUI.Quest and questUI.Quest.Visible) then break end
+                if char.Humanoid.Health <= 0 then break end
+                if not questUI.Quest.Visible then break end
                 if questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle then break end
 
                 local closest = findNPC(npcType)
@@ -1126,7 +2488,7 @@ local function farmLoop()
                 if not closest then
                     if firstMob then
                         print("[FARM] NPC:", npcType, "| Weapon:", toolName)
-                        pcall(function() tweenPos(CFrame.new(questInfo.position)) end)
+                        tweenPos(CFrame.new(questInfo.position))
                         task.wait(3)
                     end
                     task.wait(0.5)
@@ -1148,11 +2510,9 @@ local function farmLoop()
 
                     equipToolByName(toolName, char)
 
-                    if BodyVelocity then
-                        BodyVelocity.Velocity = Vector3.zero
-                        BodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-                        BodyVelocity.Parent = char.HumanoidRootPart
-                    end
+                    BodyVelocity.Velocity = Vector3.zero
+                    BodyVelocity.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+                    BodyVelocity.Parent = char.HumanoidRootPart
 
                     local success, owner = pcall(function()
                         return closest.HumanoidRootPart:GetNetworkOwner()
@@ -1163,21 +2523,17 @@ local function farmLoop()
                         closest.HumanoidRootPart.AssemblyAngularVelocity = Vector3.zero
                     end
 
-                    pcall(function()
-                        tweenPos(
-                            CFrame.new(closest.HumanoidRootPart.Position + Vector3.new(0, YPOS, 0)) * CFrame.Angles(math.rad(-90), 0, 0),
-                            function()
-                                performFullCombo()
-                            end
-                        )
-                    end)
+                    tweenPos(
+                        CFrame.new(closest.HumanoidRootPart.Position + Vector3.new(0, YPOS, 0)) * CFrame.Angles(math.rad(-90), 0, 0),
+                        function()
+                            performFullCombo()
+                        end
+                    )
 
-                    pcall(function() if RemoteEvents and RemoteEvents:FindFirstChild("HakiRemote") then RemoteEvents.HakiRemote:FireServer("Toggle") end end)
-                    pcall(function() if RemoteEvents and RemoteEvents:FindFirstChild("ObservationHakiRemote") then RemoteEvents.ObservationHakiRemote:FireServer("Toggle") end end)
+                    pcall(function() RemoteEvents:WaitForChild("HakiRemote"):FireServer("Toggle") end)
+                    pcall(function() RemoteEvents:WaitForChild("ObservationHakiRemote"):FireServer("Toggle") end)
 
-                until (char:FindFirstChild("Humanoid") and char.Humanoid.Health <= 0)
-                    or not (questUI.Quest and questUI.Quest.Visible)
-                    or questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle
+                until char.Humanoid.Health <= 0 or not questUI.Quest.Visible or questUI.Quest.Quest.Holder.Content.QuestInfo.QuestTitle.QuestTitle.Text ~= questInfo.questTitle
 
                 equipToolByName(toolName, char)
                 print("[FARM] Killed:", closest.Name, "→ Finding next mob...")
@@ -1206,7 +2562,7 @@ end)
 
 task.spawn(function()
     task.wait(15)
-    if _G.Config.AutoBuyBossKey and type(setupBossKeyAutoListener) == "function" then
+    if _G.Config.AutoBuyBossKey then
         setupBossKeyAutoListener()
     end
 end)
@@ -1216,25 +2572,20 @@ task.spawn(function()
 
     while _G.Config.AutoFarm do
         local level = 0
-        pcall(function() if player and player:FindFirstChild("Data") and player.Data:FindFirstChild("Level") then level = player.Data.Level.Value or 0 end end)
+        pcall(function() level = player.Data.Level.Value or 0 end)
         print("[SYSTEM] 🔍 Level check:", level)
 
         -- ===== ADDED: Early Dark Blade (Level 1500) =====
         if _G.Config.EarlyDarkBlade and level >= _G.Config.EarlyDarkBladeLevel then
             print("[SYSTEM] 🗡️ Level >= " .. _G.Config.EarlyDarkBladeLevel .. " → Checking Dark Blade...")
-            local hasBlade = false
-            if type(checkOwnerDarkBlade) == "function" then
-                local ok, res = pcall(checkOwnerDarkBlade)
-                if ok then hasBlade = res end
-            end
+            local hasBlade = checkOwnerDarkBlade()
             if not hasBlade then
-                local ok, res = pcall(equipDarkBladeFromInventory)
-                if ok and res then hasBlade = res end
+                hasBlade = equipDarkBladeFromInventory()
             end
             if not hasBlade then
                 print("[SYSTEM] 🗡️ No Dark Blade → Buying...")
                 if _G.Config.BuyDarkBlade then
-                    pcall(function() if type(buyDarkBlade) == "function" then buyDarkBlade() end end)
+                    pcall(buyDarkBlade)
                 end
             else
                 print("[SYSTEM] ✅ Dark Blade already owned!")
@@ -1247,20 +2598,14 @@ task.spawn(function()
             local hasArmamentHaki = false
             local hasObservationHaki = false
             pcall(function()
-                local hakiRemote = RemoteEvents and RemoteEvents:FindFirstChild("HakiRemote")
-                if hakiRemote and hakiRemote.FireServer then
-                    local ok, data = pcall(function() return hakiRemote:FireServer("GetProgression") end)
-                    if ok and data and data.Armament then hasArmamentHaki = true end
-                end
-                if type(checkHasObservationHaki) == "function" then
-                    local ok2, res2 = pcall(checkHasObservationHaki)
-                    if ok2 then hasObservationHaki = res2 end
-                end
+                local data = RemoteEvents:WaitForChild("HakiRemote"):FireServer("GetProgression")
+                if data and data.Armament then hasArmamentHaki = true end
+                hasObservationHaki = checkHasObservationHaki()
             end)
             if hasArmamentHaki and hasObservationHaki then
                 print("[SYSTEM] ✅ Level 11500+ with both Haki types!")
                 if _G.Horst_AccountChangeDone then
-                    local ok, err = pcall(_G.Horst_AccountChangeDone)
+                    local ok, err = _G.Horst_AccountChangeDone()
                     if ok then
                         print("[SYSTEM] ✅ Account change done sent successfully!")
                         task.wait(999999)
@@ -1279,94 +2624,84 @@ task.spawn(function()
 
         if level >= 4000 then
             print("[SYSTEM] 💎 Level >= 4000 → Checking Artifacts...")
-            if type(checkArtifactsUnlocked) == "function" then
-                local ok, unlocked = pcall(checkArtifactsUnlocked)
-                if ok and not unlocked then
-                    print("[SYSTEM] 🔓 Unlocking Artifacts...")
-                    local ok2, res = pcall(unlockArtifacts)
-                    if ok2 and res then
-                        print("[SYSTEM] ✅ Artifacts unlocked! Equipping...")
-                        pcall(equipArtifacts)
-                    end
-                else
-                    print("[SYSTEM] ✅ Artifacts already unlocked")
+            if not checkArtifactsUnlocked() then
+                print("[SYSTEM] 🔓 Unlocking Artifacts...")
+                local unlocked = unlockArtifacts()
+                if unlocked then
+                    print("[SYSTEM] ✅ Artifacts unlocked! Equipping...")
+                    equipArtifacts()
                 end
+            else
+                print("[SYSTEM] ✅ Artifacts already unlocked")
             end
         end
 
         if level >= 6000 then
             print("[SYSTEM] 👁️ Level >= 6000 → Checking Observation Haki...")
-            if not checkHasObservationHaki or type(checkHasObservationHaki) ~= "function" then
-                -- nothing
+            if not checkHasObservationHaki() then
+                print("[SYSTEM] 🔓 Buying Observation Haki...")
+                buyObservationHaki()
             else
-                local ok, hasObs = pcall(checkHasObservationHaki)
-                if ok and not hasObs then
-                    print("[SYSTEM] 🔓 Buying Observation Haki...")
-                    pcall(buyObservationHaki)
-                else
-                    print("[SYSTEM] ✅ Observation Haki already owned")
-                end
+                print("[SYSTEM] ✅ Observation Haki already owned")
             end
         end
 
         if _G.Config.FarmSaberBoss then
-            if type(checkBossKeyCount) == "function" then
-                local ok, bossKeyCount = pcall(checkBossKeyCount)
-                if ok and bossKeyCount and bossKeyCount >= 1 then
-                    print("[SYSTEM] 🎯 Starting Saber Boss farm...")
-                    pcall(farmSaberBoss)
-                    task.wait(5)
-                else
-                    print("[SYSTEM] ⚠️ Not enough Boss Keys for Saber Boss (need 1)")
-                end
+            local bossKeyCount = checkBossKeyCount()
+            if bossKeyCount >= 1 then
+                print("[SYSTEM] 🎯 Starting Saber Boss farm...")
+                farmSaberBoss()
+                task.wait(5)
+            else
+                print("[SYSTEM] ⚠️ Not enough Boss Keys for Saber Boss (need 1)")
             end
         end
 
         if _G.Config.ExchangeIchigo and level >= _G.Config.IchigoMinLevel then
             print("[SYSTEM] ⚔️ Checking Ichigo Exchange...")
-            if type(checkDarkBlade) == "function" then
-                local ok, hasAll = pcall(checkIchigoRequirements)
-                if ok and hasAll then
+            if not checkDarkBlade("Ichigo") then
+                local hasAll, missing = checkIchigoRequirements()
+                if hasAll then
                     print("[SYSTEM] ✅ All Ichigo requirements met! Exchanging...")
-                    pcall(exchangeIchigo)
+                    exchangeIchigo()
                 else
-                    print("[SYSTEM] ❌ Missing Ichigo requirements")
+                    print("[SYSTEM] ❌ Missing Ichigo requirements:")
+                    for _, item in pairs(missing) do
+                        print("[SYSTEM]   - " .. item)
+                    end
                 end
+            else
+                print("[SYSTEM] ✅ Ichigo already owned")
             end
         end
 
         print("[SYSTEM] 🗡️ Checking Dark Blade...")
-        local hasBlade = false
-        if type(findDarkBladeInHand) == "function" then
-            local ok, res = pcall(findDarkBladeInHand)
-            if ok and res then hasBlade = true end
-        end
-        if not hasBlade and type(equipDarkBladeFromInventory) == "function" then
-            local ok, res = pcall(equipDarkBladeFromInventory)
-            if ok and res then hasBlade = true end
+        local hasBlade = findDarkBladeInHand() ~= nil
+        if not hasBlade then
+            hasBlade = equipDarkBladeFromInventory()
         end
 
         if hasBlade then
             print("[SYSTEM] ✅ Dark Blade found!")
             if _G.Config.FruitFarm and level >= _G.Config.FruitMinLevel then
                 print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Config.FruitMinLevel .. " → Checking Fruit Farm...")
-                local ok, hasFruit = pcall(checkHasFruit, _G.Config.TargetFruit)
-                if ok and hasFruit then
+                local hasFruit = checkHasFruit(_G.Config.TargetFruit)
+                if hasFruit then
                     print("[SYSTEM] ✅ Already have " .. _G.Config.TargetFruit .. " → Fruit Farm Mode!")
                     isFruitFarming = true
-                    pcall(equipFruit, _G.Config.TargetFruit)
+                    equipFruit(_G.Config.TargetFruit)
                     local island = _G.Config.FruitFarmIsland
                     local pos = _G.Config.FruitFarmPos
-                    safeFire(tpRemote or "TeleportToPortal", island)
+                    pcall(function() tpRemote:FireServer(island) end)
                     task.wait(3)
                     local char = player.Character
-                    if char and char:FindFirstChild("HumanoidRootPart") and pos then
+                    if char and char:FindFirstChild("HumanoidRootPart") then
                         for i = 1, 10 do
                             char.HumanoidRootPart.CFrame = pos
                             task.wait(0.1)
                         end
                     end
-                    task.spawn(function() if type(fruitFarmLoop) == "function" then pcall(fruitFarmLoop) end end)
+                    task.spawn(fruitFarmLoop)
                     break
                 else
                     print("[SYSTEM] ❌ No " .. _G.Config.TargetFruit .. " → Starting Fruit Farm process...")
@@ -1380,16 +2715,12 @@ task.spawn(function()
         end
 
         print("[SYSTEM] ❌ No Dark Blade | Checking Haki...")
-        local hasHaki = false
-        if type(checkHakiStatus) == "function" then
-            local ok, res = pcall(checkHakiStatus)
-            if ok then hasHaki = res end
-        end
+        local hasHaki = checkHakiStatus()
 
         if hasHaki then
             print("[SYSTEM] ✅ Has Haki but no Dark Blade → Buying...")
             if _G.Config.BuyDarkBlade then
-                pcall(function() if type(buyDarkBlade) == "function" then buyDarkBlade() end end)
+                pcall(buyDarkBlade)
             end
             print("[SYSTEM] 🗡️ Dark Blade process done! Normal Farm...")
             break
@@ -1416,22 +2747,16 @@ end)
 -- ═══════════════════════════════════════════════════════════════
 -- [19] EVENT HANDLERS
 -- ═══════════════════════════════════════════════════════════════
-if player then
-    player.OnTeleport:Connect(function(state)
-        if state == Enum.TeleportState.Failed then
-            task.wait(1.5)
-            pcall(function() if type(rejoin) == "function" then rejoin() end end)
-        end
-    end)
-end
+player.OnTeleport:Connect(function(state)
+    if state == Enum.TeleportState.Failed then
+        task.wait(1.5)
+        pcall(rejoin)
+    end
+end)
 
 Players.PlayerRemoving:Connect(function()
     pcall(function()
-        if game.HttpGet then
-            game:HttpGet("https://node-api--0890939481gg.replit.app/leave")
-        else
-            warn("[EVENT] HttpGet not available")
-        end
+        game:HttpGet("https://node-api--0890939481gg.replit.app/leave")
     end)
 end)
 
@@ -1440,7 +2765,7 @@ end)
 -- ═══════════════════════════════════════════════════════════════
 task.spawn(function()
     RunService.Heartbeat:Connect(function()
-        if player and player.Character then
+        if player.Character then
             for _, v in pairs(player.Character:GetChildren()) do
                 if v:IsA("BasePart") and v.Name ~= "HumanoidRootPart" then
                     v.CanCollide = false
