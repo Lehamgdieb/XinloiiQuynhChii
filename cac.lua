@@ -44,12 +44,12 @@ _G.Config = {
 
     -- ===== ADDED: Combat Settings (Melee + Skill) =====
     UseMeleeAttack  = true,      -- ใช้การโจมตีปกติ (ต่อย)
-    MeleeAttackDelay = 0.08,     -- ความหน่วงระหว่างการโจมตีปกติ
+    MeleeAttackDelay = 0.05,     -- ความหน่วงระหว่างการโจมตีปกติ
     UseSkills       = true,      -- ใช้สกิลทั้งหมด (Z,X,C,V,F)
     SkillComboOrder = {"Z","X","C","V","F"}, -- ลำดับการใช้สกิล
     SkillDelay      = 0.15,      -- ความหน่วงระหว่างสกิล
     CombatPriority  = "MeleeFirst", -- MeleeFirst = โจมตีปกติก่อนแล้วตามด้วยสกิล
-    CombatHeight    = 5,         -- ความสูงในการบิน (ปรับลดจาก 9 เพื่อตีเร็วขึ้น)
+    CombatHeight    = 8,         -- ความสูงในการบิน (ปรับลดจาก 9 เพื่อตีเร็วขึ้น)
     -- ===== End Added =====
 
     -- Haki Quest
@@ -146,6 +146,7 @@ local isFruitFarming = false
 local isFarmingIchigoBoss = false
 
 -- ===== ADDED: Combat state variables =====
+local darkBladeObtained = false
 local lastMeleeTime = 0
 local lastSkillTime = 0
 -- ===== End Added =====
@@ -847,45 +848,72 @@ task.spawn(function()
 end)
 end -- AutoHit
 
--- Auto Stats (ปรับให้ใช้สัดส่วน 80/10/10 สำหรับ level สูง)
+-- Auto Stats (Tự Reset BẮT BUỘC 1 LẦN và cộng 80% Sword / 20% Defense khi có Dark Blade)
 if _G.Config.AutoStats then
 task.spawn(function()
+    local hasResetForDarkBlade = false
     while task.wait(5) do
         pcall(function()
-            local points = player.Data.StatPoints.Value or 0
-            if points <= 0 then return end
+            local points = 0
+            local level = 0
+            pcall(function() 
+                points = player.Data.StatPoints.Value or 0 
+                level = player.Data.Level.Value or 0 
+            end)
+            
+            local hasDB = checkOwnerDarkBlade() or darkBladeObtained
 
-            local level = player.Data.Level.Value or 0
-            print("[STATS] Lv." .. level .. " | Stat points:", points)
-
-            if level < _G.Config.HakiMinLevel then
-                -- Level 1-999: Melee 2 + Defense 1 ต่อรอบ (สัดส่วน 67%/33%)
-                local melee, defense = 0, 0
-                while points > 0 do
-                    local m = math.min(2, points)
-                    if m > 0 then statRemote:FireServer("Melee", m); points = points - m; melee = melee + m; task.wait(0.1) end
-                    if points <= 0 then break end
-
-                    local d = math.min(1, points)
-                    if d > 0 then statRemote:FireServer("Defense", d); points = points - d; defense = defense + d; task.wait(0.1) end
+            if hasDB then
+                -- BẮT BUỘC TẨY ĐIỂM NẾU CHƯA TẨY LẦN NÀO (Không cần check chỉ số Melee/Power cũ nữa)
+                if not hasResetForDarkBlade then
+                    print("[STATS] 🔄 Đã phát hiện Dark Blade! ÉP BUỘC TẨY ĐIỂM (Reset Stats) để làm chuẩn Build 80/20...")
+                    pcall(function()
+                        local resetRemote = RemoteEvents:FindFirstChild("ResetStats")
+                        if resetRemote then resetRemote:FireServer() end
+                    end)
+                    task.wait(3) -- Chờ server xử lý trả điểm
+                    hasResetForDarkBlade = true
+                    
+                    -- Cập nhật lại số điểm sau khi đã tẩy
+                    pcall(function() points = player.Data.StatPoints.Value or 0 end)
                 end
-                print("[STATS] ✅ Melee +" .. melee .. ", Defense +" .. defense .. " (Lv." .. level .. ")")
+
+                -- CỘNG ĐIỂM: 80% Sword, 20% Defense
+                if points > 0 then
+                    local swordPts = math.floor(points * 0.8)
+                    local defensePts = points - swordPts
+                    
+                    if swordPts > 0 then 
+                        pcall(function() statRemote:FireServer("Sword", swordPts) end)
+                        task.wait(0.2) 
+                    end
+                    if defensePts > 0 then 
+                        pcall(function() statRemote:FireServer("Defense", defensePts) end)
+                        task.wait(0.2) 
+                    end
+                    
+                    print("[STATS] ✅ Đã dồn điểm: Sword +" .. swordPts .. ", Defense +" .. defensePts)
+                end
+
             else
-                -- Level 1000+: Sword 80%, Defense 10%, Power 10%
-                local sword, defense, power = 0, 0, 0
-                while points > 0 do
-                    local s = math.min(3, points)
-                    if s > 0 then statRemote:FireServer("Sword", s); points = points - s; sword = sword + s; task.wait(0.1) end
-                    if points <= 0 then break end
-
-                    local d = math.min(2, points)
-                    if d > 0 then statRemote:FireServer("Defense", d); points = points - d; defense = defense + d; task.wait(0.1) end
-                    if points <= 0 then break end
-
-                    local p = math.min(1, points)
-                    if p > 0 then statRemote:FireServer("Power", p); points = points - p; power = power + p; task.wait(0.1) end
+                -- CHƯA CÓ DARK BLADE: Cộng bình thường (Melee / Defense)
+                if points > 0 then
+                    if level < _G.Config.HakiMinLevel then
+                        local melee = math.floor(points * 0.67)
+                        local defense = points - melee
+                        if melee > 0 then statRemote:FireServer("Melee", melee); task.wait(0.1) end
+                        if defense > 0 then statRemote:FireServer("Defense", defense); task.wait(0.1) end
+                        print("[STATS] ✅ Melee +" .. melee .. ", Defense +" .. defense .. " (Lv." .. level .. ")")
+                    else
+                        local sword = math.floor(points * 0.6)
+                        local defense = math.floor(points * 0.3)
+                        local power = points - sword - defense
+                        if sword > 0 then statRemote:FireServer("Sword", sword); task.wait(0.1) end
+                        if defense > 0 then statRemote:FireServer("Defense", defense); task.wait(0.1) end
+                        if power > 0 then statRemote:FireServer("Power", power); task.wait(0.1) end
+                        print("[STATS] ✅ Sword +" .. sword .. ", Defense +" .. defense .. ", Power +" .. power)
+                    end
                 end
-                print("[STATS] ✅ Sword +" .. sword .. ", Defense +" .. defense .. ", Power +" .. power)
             end
         end)
     end
@@ -1278,7 +1306,7 @@ local function eatFruit(fruitTool)
     
     task.wait(3)
     
-    -- 4. เช็คว่าผลหาย FruitData หรือยัง (Quake จะอยู่ใน Character แต่ FruitData จะหาย)
+    -- 4. เช็คว่าผลหาย FruitData หรือยัง (Quake sẽอยู่ใน Character แต่ FruitData จะหาย)
     local fruitTool = nil
     if backpack then
         fruitTool = backpack:FindFirstChild(fruitName)
@@ -1514,7 +1542,7 @@ local function startFruitFarm()
                     task.wait(2)
                     gotTarget = true
                 else
-                    -- ไม่ใช่ผลที่ต้องการ → กินทิ้ง
+                    -- Không phải kết quả mong muốn → กินทิ้ง
                     oldPrint("[FRUIT] ❌ Not " .. targetFruit .. " → Eating " .. fruitTool.Name .. "...")
                     eatFruit(fruitTool)
                     task.wait(2)
@@ -2508,6 +2536,7 @@ task.spawn(function()
                 end
             else
                 print("[SYSTEM] ✅ Dark Blade already owned!")
+                darkBladeObtained = true -- ĐỒNG BỘ CHO AUTO STATS BIẾT
             end
         end
         -- ===== End Added =====
@@ -2602,6 +2631,7 @@ task.spawn(function()
 
         if hasBlade then
             print("[SYSTEM] ✅ Dark Blade found!")
+            darkBladeObtained = true -- ĐỒNG BỘ CHO AUTO STATS BIẾT
             if _G.Config.FruitFarm and level >= _G.Config.FruitMinLevel then
                 print("[SYSTEM] 🍎 Level " .. level .. " >= " .. _G.Config.FruitMinLevel .. " → Checking Fruit Farm...")
                 local hasFruit = checkHasFruit(_G.Config.TargetFruit)
@@ -2690,4 +2720,4 @@ task.spawn(function()
     end)
 end)
 
-print("[SYSTEM] ✅ Script loaded safely for Delta!")
+print("[SYSTEM] ✅ Script loaded safely for Delta! (100% Original Source Code + Fixes + Auto Reset Dark Blade Build)")
