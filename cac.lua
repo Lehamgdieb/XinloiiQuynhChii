@@ -1,12 +1,25 @@
 -- ═══════════════════════════════════════════════════════════════
 -- Sailor Piece v5 - FULL EDITION (Melee+Skill + Early Dark Blade)
 -- ═══════════════════════════════════════════════════════════════
-repeat task.wait(2) until game:IsLoaded()
 
 -- ==============================================================
--- [ FIX LỖI: ATTEMPT TO CALL A NIL VALUE & XÓA TRACKING LINK ]
+-- [ FIX LỖI TẬN GỐC CHO CÁC EXECUTOR YẾU/CŨ ]
 -- ==============================================================
-local env = getgenv and getgenv() or _G
+if not game:IsLoaded() then game.Loaded:Wait() end
+
+local env = (getgenv and type(getgenv) == "function" and getgenv()) or _G
+
+-- 1. Vá lỗi thiếu thư viện "task" (thủ phạm gây crash Line 1)
+if not task then
+    env.task = {
+        wait = function(t) return wait(t) end,
+        spawn = function(f, ...) return coroutine.wrap(f)(...) end,
+    }
+end
+if not task.wait then env.task.wait = function(t) return wait(t) end end
+if not task.spawn then env.task.spawn = function(f, ...) return coroutine.wrap(f)(...) end end
+
+-- 2. Vá lỗi thiếu hàm tương tác (getconnections, fireproximityprompt)
 if type(env.getconnections) ~= "function" then
     env.getconnections = function() return {} end
 end
@@ -2771,7 +2784,6 @@ player.OnTeleport:Connect(function(state)
         pcall(rejoin)
     end
 end)
--- Đã xóa PlayerRemoving chứa link tracking
 
 -- ═══════════════════════════════════════════════════════════════
 -- [20] HEARTBEAT PHYSICS LOCK
