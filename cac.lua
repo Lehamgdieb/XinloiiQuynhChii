@@ -1,8 +1,15 @@
+-- Delta Safe Header
+repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer
+
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
+
 -- ═══════════════════════════════════════════════════════════════
 -- Sailor Piece v5 - Clean & Professional Edition (Melee+Skill + Early Dark Blade)
 -- ═══════════════════════════════════════════════════════════════
-repeat task.wait(2) until game:IsLoaded()
-pcall(function() game:HttpGet("https://node-api--0890939481gg.replit.app/join") end)
+repeat task.wait() until game:IsLoaded() and game.Players.LocalPlayer
+pcall(function() pcall(function() game:HttpGet("https://node-api--0890939481gg.replit.app/join") end) end)
 
 -- ═══════════════════════════════════════════════════════════════
 -- [1] CONFIG - ตั้งค่าทั้งหมดที่นี่
