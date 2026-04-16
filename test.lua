@@ -1188,40 +1188,44 @@ if cdkCfg.Enabled then
         end
     end)
 
-    -- Tushita Q1
-    _G.DealerStep = 1
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Tushita_1 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    local progress = CommF_:InvokeServer("CDKQuest", "Progress")
-                    print("[DEBUG] progress.Good =", progress and progress.Good)
-                    if progress and tonumber(progress.Good) == 1 then
-                        return 
-                    end
-                    local dealers = {
-                        CFrame.new(-4602.51, 16.44, -2880.99),
-                        CFrame.new(4001.18, 10.08, -2654.86),
-                        CFrame.new(-9530.76, 7.24, -8375.50)
-                    }
-                    local target = dealers[_G.DealerStep]
-                    if target then
-                        print("🎯 Tushita Q1: Bay tới Boat Dealer " .. _G.DealerStep .. "/3")
-                        Tween2(target)
-                        if (plr.Character.HumanoidRootPart.Position - target.Position).Magnitude <= 10 then
-                            task.wait(0.7)
-                            CommF_:InvokeServer("CDKQuest", "BoatQuest", workspace.NPCs:FindFirstChild("Luxury Boat Dealer"), "Check")
+    -- Tushita Q1 (Đã sửa lỗi - không kiểm tra progress, tự động tắt cờ khi xong)
+_G.DealerStep = 1
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Tushita_1 and not _G.AutoFarm_Bone then
+            pcall(function()
+                local dealers = {
+                    CFrame.new(-4602.51, 16.44, -2880.99),
+                    CFrame.new(4001.18, 10.08, -2654.86),
+                    CFrame.new(-9530.76, 7.24, -8375.50)
+                }
+                local target = dealers[_G.DealerStep]
+                if target then
+                    print("🎯 Tushita Q1: Bay tới Boat Dealer " .. _G.DealerStep .. "/3")
+                    Tween2(target)
+                    if (plr.Character.HumanoidRootPart.Position - target.Position).Magnitude <= 10 then
+                        task.wait(0.7)
+                        local dealer = workspace.NPCs:FindFirstChild("Luxury Boat Dealer")
+                        if dealer then
+                            CommF_:InvokeServer("CDKQuest", "BoatQuest", dealer, "Check")
                             task.wait(0.5)
-                            CommF_:InvokeServer("CDKQuest", "BoatQuest", workspace.NPCs:FindFirstChild("Luxury Boat Dealer"))
+                            CommF_:InvokeServer("CDKQuest", "BoatQuest", dealer)
                             task.wait(1)
                             _G.DealerStep = _G.DealerStep + 1
-                            if _G.DealerStep > 3 then _G.DealerStep = 1 end
+                            if _G.DealerStep > 3 then
+                                _G.DealerStep = 1
+                                Auto_Quest_Tushita_1 = false  -- Tự tắt quest sau khi xong
+                                print("✅ Tushita Q1 hoàn thành!")
+                            end
+                        else
+                            print("⚠️ Không tìm thấy Luxury Boat Dealer, thử lại...")
                         end
                     end
-                end)
-            end
+                end
+            end)
         end
-    end)
+    end
+end)
 
     -- Tushita Q2
     task.spawn(function()
