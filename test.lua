@@ -56,6 +56,9 @@ local function checkRaceV3()
     return (v1 == -2 and "V3") or (v2 == -2 and "V2") or "V1"
 end
 
+-- =====================================================================
+-- KIỂM TRA VŨ KHÍ (YAMA, TUSHITA, CDK)
+-- =====================================================================
 local function checkWeapon(weaponName)
     local bp = plr:FindFirstChild("Backpack")
     local char = plr.Character
@@ -77,6 +80,7 @@ local function hasTushita() return checkWeapon("Tushita") end
 local function hasCDK() return checkWeapon("Cursed Dual Katana") end
 
 local function isDoingHazeQuest()
+    -- Cách 1: Dựa vào số Alucard Fragment (nếu có 4 hoặc 5 mảnh thì chắc chắn đang ở Yama Q2 hoặc Yama Q3)
     local frags = 0
     pcall(function()
         local inv = CommF_("getInventory")
@@ -89,12 +93,16 @@ local function isDoingHazeQuest()
             end
         end
     end)
+    -- Yama Q2 là mảnh thứ 4, Yama Q3 là mảnh thứ 5 (cũng có Haze)
     if frags == 4 or frags == 5 then
+        -- Kiểm tra thêm xem có đang ở trial Evil không (để loại trừ trường hợp đang làm Tushita)
         local progress = CommF_("CDKQuest", "Progress")
         if progress and progress.Evil then
             return true
         end
     end
+
+    -- Cách 2: Dựa vào UI (giữ lại để tương thích nếu game hiển thị)
     local questContainer = plr.PlayerGui:FindFirstChild("Main") 
         and plr.PlayerGui.Main:FindFirstChild("Quest") 
         and plr.PlayerGui.Main.Quest:FindFirstChild("Container")
@@ -109,25 +117,41 @@ local function isDoingHazeQuest()
             end
         end
     end
+
     return false
 end
 
+-- =====================================================================
+-- CONFIG
+-- =====================================================================
 local config = _G.UltimateConfig or {}
 local kaitunCfg = config.Kaitun or {}
 local bananaCfg = config.BananaVIP or {}
 local cdkCfg = config.AutoCDK or {}
 local levelThreshold = config.LevelThreshold or 2500
 
-_G.IsDoingAutoCDK = false
-_G.CDKPriority = false
+-- =====================================================================
+-- BIẾN TOÀN CỤC ĐIỀU KHIỂN
+-- =====================================================================
+_G.IsDoingAutoCDK = false   -- Đang chạy Auto CDK (chặn các tính năng khác)
+_G.CDKPriority = false      -- Ưu tiên CDK
 
+-- =====================================================================
+-- HỆ THỐNG KAITUN (ĐÃ ĐIỀU CHỈNH LOGIC MỚI)
+-- =====================================================================
 local KaitunLoaded = false
 local function TryLoadKaitun()
     if not kaitunCfg.Enabled or KaitunLoaded then return end
+
+    -- Cho phép Kaitun nếu đang làm Haze, bất kể có đang Auto CDK hay không
     local doingHaze = isDoingHazeQuest()
-    if not doingHaze and _G.IsDoingAutoCDK then return end
+    if not doingHaze and _G.IsDoingAutoCDK then
+        return  -- Chỉ chặn nếu không làm Haze và đang Auto CDK
+    end
 
     local currentLvl = getLevel()
+    
+    -- Nếu level dưới ngưỡng -> luôn chạy Kaitun
     if currentLvl < levelThreshold then
         KaitunLoaded = true
         print("[Kaitun] Kích hoạt (Dưới level yêu cầu)")
@@ -139,6 +163,7 @@ local function TryLoadKaitun()
         return
     end
 
+    -- Level đã đủ: chỉ chạy Kaitun nếu ĐANG LÀM QUEST HAZE hoặc ĐÃ CÓ CDK
     if doingHaze or hasCDK() then
         local raceStatus = checkRaceV3()
         if raceStatus == "V3" or raceStatus == "V4" then
@@ -161,6 +186,9 @@ task.spawn(function()
     while task.wait(5) do TryLoadKaitun() end
 end)
 
+-- =====================================================================
+-- AUTO TEAM & CHỜ NHÂN VẬT
+-- =====================================================================
 task.spawn(function()
     while task.wait(1) do
         if plr and not plr.Team then
@@ -174,9 +202,13 @@ end)
 
 repeat task.wait(0.5) until plr and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart")
 
+-- =====================================================================
+-- BANANA VIP (HOP BOSS + UI) - GIỮ NGUYÊN NHƯNG THÊM CHẶN KHI ĐANG CDK
+-- =====================================================================
 local AutoFindVIPBoss = bananaCfg.AutoFindVIPBoss or false
 local AutoHopBoss = bananaCfg.AutoHopBoss or false
 
+-- Hệ thống Key VIP (giữ nguyên)
 local HWID = game:GetService("RbxAnalyticsService"):GetClientId()
 local ADMIN_KEY = "Admin_Dep_Trai_VIP"
 local GET_KEY_LINK = "http://14.174.63.243:8080/getkey/index.php?hwid=" .. HWID
@@ -301,6 +333,9 @@ if AutoFindVIPBoss or AutoHopBoss then
     end)
 end
 
+-- =========================================================
+-- PHẦN VIP HOP (GIỮ NGUYÊN NHƯNG CÓ CHẶN KHI ĐANG AUTO CDK)
+-- =========================================================
 task.spawn(function()
     task.wait(5)
 
@@ -522,9 +557,9 @@ task.spawn(function()
     end
 
     local function Attack()
-        if _G.IsDoingAutoCDK then return end
-        if not AutoAttack then return end
-        EquipMeleeIfNeeded()
+    if _G.IsDoingAutoCDK then return end  -- Tắt hoàn toàn khi đang CDK
+    if not AutoAttack then return end
+    EquipMeleeIfNeeded()
         local targets = GetTargets()
         if #targets == 0 or not RegisterAttack or not RegisterHit then return end
         local data = {[1] = nil, [2] = {}}
@@ -543,6 +578,7 @@ task.spawn(function()
     local isHopping = false
 
     local function performHop()
+        -- 🔒 CHẶN HOP KHI ĐANG AUTO CDK
         if _G.IsDoingAutoCDK then
             HopLabel.Text = "HOP: Bị chặn (đang Auto CDK)"
             return
@@ -705,10 +741,11 @@ task.spawn(function()
 end)
 
 -- =====================================================================
--- AUTO CDK SYSTEM
+-- HỆ THỐNG ƯU TIÊN & AUTO CDK (TÍCH HỢP TOÀN BỘ CODE AUTO CDK)
 -- =====================================================================
 if cdkCfg.Enabled then
-    _G.Auto_DualKatana = false
+    -- Biến toàn cục cho Auto CDK (giữ nguyên từ script gốc, nhưng đã có _G.IsDoingAutoCDK)
+    _G.Auto_DualKatana = false   -- sẽ bật khi bắt đầu
     _G.TargetMastery = cdkCfg.TargetMastery or 350
     _G.HeightFarm = 40
     _G.AutoFarm_Bone = false
@@ -726,10 +763,11 @@ if cdkCfg.Enabled then
     _G.DealerStep = 1
 
     local Pos = CFrame.new(0, _G.HeightFarm, 0)
-    local API_SOUL_REAPER = "http://14.174.63.243:8080/get_soulreaper.php"
-    local API_CAKE_QUEEN = "http://14.174.63.243:8080/get_cakequeen.php"
-    local API_PIRATE_RAID = "http://14.174.63.243:8080/get_pirateraid.php"
+    local API_SOUL_REAPER = "http://14.174.145.113:8080/get_soulreaper.php"
+    local API_CAKE_QUEEN = "http://14.174.145.113:8080/get_cakequeen.php"
+    local API_PIRATE_RAID = "http://14.174.145.113:8080/get_pirateraid.php"
 
+    -- Hàm hỗ trợ từ CDK script
     local Net = require(ReplicatedStorage.Modules.Net)
     local RegisterAttack = Net:RemoteEvent("RegisterAttack", true)
     local RegisterHit = Net:RemoteEvent("RegisterHit", true)
@@ -759,24 +797,30 @@ if cdkCfg.Enabled then
         end)
     end
 
-    local function EquipSword(itemName)
-        local char = plr.Character
-        if not char or char.Humanoid.Health <= 0 then return end
-        if _G.IsTakingDamage then
-            char.Humanoid:UnequipTools()
-            return
-        end
-        local toolInChar = char:FindFirstChild(itemName)
-        local toolInBack = plr.Backpack:FindFirstChild(itemName)
-        if not toolInChar and not toolInBack then
-            pcall(function() CommF_("LoadItem", itemName) end)
-            task.wait(0.2)
-            toolInBack = plr.Backpack:FindFirstChild(itemName)
-        end
-        if toolInBack and not toolInChar then
-            char.Humanoid:EquipTool(toolInBack)
-        end
+local function EquipSword(itemName)
+    local char = plr.Character
+    if not char or char.Humanoid.Health <= 0 then return end
+
+    -- Nếu đang cần chịu sát thương (Yama Q3 hoặc tương tự)
+    if _G.IsTakingDamage then
+        -- Tháo hết vũ khí và không làm gì thêm
+        char.Humanoid:UnequipTools()
+        return
     end
+
+    local toolInChar = char:FindFirstChild(itemName)
+    local toolInBack = plr.Backpack:FindFirstChild(itemName)
+
+    if not toolInChar and not toolInBack then
+        pcall(function() CommF_("LoadItem", itemName) end)
+        task.wait(0.2)
+        toolInBack = plr.Backpack:FindFirstChild(itemName)
+    end
+
+    if toolInBack and not toolInChar then
+        char.Humanoid:EquipTool(toolInBack)
+    end
+end
 
     local function GetMaterial(matName)
         local inv = CommF_("getInventory")
@@ -880,6 +924,8 @@ if cdkCfg.Enabled then
         end)
     end
 
+    -- Anti-AFK & Auto clear lỗi (đã có ở đầu file)
+
     RS.Stepped:Connect(function()
         pcall(function()
             if (_G.Auto_DualKatana or _G.AutoFarm_Bone) and not _G.IsResetting then
@@ -901,6 +947,7 @@ if cdkCfg.Enabled then
     local Auto_Quest_Yama_1, Auto_Quest_Yama_2, Auto_Quest_Yama_3 = false, false, false
     local Auto_Quest_Tushita_1, Auto_Quest_Tushita_2, Auto_Quest_Tushita_3 = false, false, false
 
+    -- ===== VÒNG LẶP MASTERY =====
     task.spawn(function()
         while task.wait(1) do
             if _G.Auto_DualKatana then
@@ -925,6 +972,7 @@ if cdkCfg.Enabled then
         end
     end)
 
+    -- ===== LUỒNG FARM XƯƠNG =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_DualKatana and _G.AutoFarm_Bone then
@@ -949,6 +997,7 @@ if cdkCfg.Enabled then
         end
     end)
 
+    -- ===== LUỒNG QUEST CHÍNH =====
     task.spawn(function()
         while task.wait() do
             if _G.Auto_DualKatana then
@@ -963,9 +1012,9 @@ if cdkCfg.Enabled then
                         if frags == 5 and not workspace.Map:FindFirstChild("HellDimension") then
                             if workspace.Enemies:FindFirstChild("Soul Reaper") then _G.IsTakingDamage = true end
                         end
-                        if not _G.IsTakingDamage then
-                            EquipSword(_G.CurrentSword)
-                        end
+                       if not _G.IsTakingDamage then
+    EquipSword(_G.CurrentSword)
+end
                         Auto_Quest_Yama_1, Auto_Quest_Yama_2, Auto_Quest_Yama_3 = false, false, false
                         Auto_Quest_Tushita_1, Auto_Quest_Tushita_2, Auto_Quest_Tushita_3 = false, false, false
 
@@ -975,7 +1024,7 @@ if cdkCfg.Enabled then
                                 SmartMove(boss.HumanoidRootPart.CFrame * Pos)
                                 AttackNoCoolDown()
                             else
-                                -- Logic mở cửa boss cuối (giữ nguyên code cũ của bạn ở đây)
+                                -- (giữ nguyên logic mở cửa như script gốc)
                             end
                         elseif frags == 5 then Auto_Quest_Yama_3 = true; CommF_("CDKQuest", "StartTrial", "Evil")
                         elseif frags == 4 then Auto_Quest_Yama_2 = true; CommF_("CDKQuest", "StartTrial", "Evil")
@@ -990,364 +1039,380 @@ if cdkCfg.Enabled then
         end
     end)
 
-    -- Yama Q1
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Yama_1 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    local pirate = workspace.Enemies:FindFirstChild("Mythological Pirate")
-                    if pirate then 
-                        SmartMove(pirate.HumanoidRootPart.CFrame * CFrame.new(0, 0, -2))
-                    else 
-                        Tween2(CFrame.new(-13451, 543, -6961)) 
-                    end
-                end)
-            end
+-- Yama Q1
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Yama_1 and not _G.AutoFarm_Bone then
+            pcall(function()
+                local pirate = workspace.Enemies:FindFirstChild("Mythological Pirate")
+                if pirate then 
+                    SmartMove(pirate.HumanoidRootPart.CFrame * CFrame.new(0, 0, -2))
+                else 
+                    Tween2(CFrame.new(-13451, 543, -6961)) 
+                end
+            end)
         end
-    end)
+    end
+end)
 
-    -- Yama Q2 (Haze)
-    _G.HzIdx = _G.HzIdx or 1
-    _G.NeedResetFromSubmerged = _G.NeedResetFromSubmerged or false
+-- Yama Q2 (Haze) 
+_G.HzIdx = _G.HzIdx or 1
+_G.NeedResetFromSubmerged = _G.NeedResetFromSubmerged or false
 
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Yama_2 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    local foundHaze = false
-                    local questHaze = plr:FindFirstChild("QuestHaze")
-                    
-                    if questHaze then
-                        for _, hitMon in pairs(questHaze:GetChildren()) do
-                            if hitMon:IsA("IntValue") and hitMon.Value > 0 then
-                                for _, v in pairs(workspace.Enemies:GetChildren()) do
-                                    if string.find(v.Name, hitMon.Name) and v:FindFirstChild("HazeESP") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                                        foundHaze = true
-                                        SmartMove(v.HumanoidRootPart.CFrame * Pos)
-                                        AttackNoCoolDown()
-                                        break
-                                    end
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Yama_2 and not _G.AutoFarm_Bone then
+            pcall(function()
+                local foundHaze = false
+                local questHaze = player:FindFirstChild("QuestHaze")
+                
+                if questHaze then
+                    for _, hitMon in pairs(questHaze:GetChildren()) do
+                        if hitMon:IsA("IntValue") and hitMon.Value > 0 then
+                            for _, v in pairs(workspace.Enemies:GetChildren()) do
+                                if string.find(v.Name, hitMon.Name) and v:FindFirstChild("HazeESP") and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                                    foundHaze = true
+                                    SmartMove(v.HumanoidRootPart.CFrame * Pos)
+                                    AttackNoCoolDown()
+                                    break
                                 end
                             end
-                            if foundHaze then break end
+                        end
+                        if foundHaze then break end
+                    end
+                end
+                
+                if not foundHaze then
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if v:FindFirstChild("HazeESP") and v.Humanoid.Health > 0 then 
+                            foundHaze = true
+                            SmartMove(v.HumanoidRootPart.CFrame * Pos)
+                            AttackNoCoolDown()
+                            break 
                         end
                     end
-                    
-                    if not foundHaze then
-                        for _, v in pairs(workspace.Enemies:GetChildren()) do
-                            if v:FindFirstChild("HazeESP") and v.Humanoid.Health > 0 then 
-                                foundHaze = true
-                                SmartMove(v.HumanoidRootPart.CFrame * Pos)
-                                AttackNoCoolDown()
-                                break 
-                            end
+                end
+                
+                if not foundHaze then
+                    for _, v in pairs(ReplicatedStorage:GetChildren()) do
+                        if v:FindFirstChild("HazeESP") then
+                            foundHaze = true
+                            SmartMove(v.HumanoidRootPart.CFrame * Pos)
+                            break
                         end
                     end
+                end
+                
+                if not foundHaze then
+                    local HazeIslands = {
+                        CFrame.new(3399.3, 72.4, 1573.0),   CFrame.new(-2131.0, 38.0, -10106.0),
+                        CFrame.new(-950.0, 59.0, -10907.0), CFrame.new(5138.2, 12.3, 431.6),
+                        CFrame.new(-16204.1, 9.1, 479.2),   CFrame.new(-9509.3, 142.1, 5535.2),
+                        CFrame.new(-12548.0, 337.0, -7481.0),CFrame.new(-247.1, 20.7, 5562.0),
+                        CFrame.new(2443.1, 21.7, -6573.4),  CFrame.new(-10016.0, 332.0, -8326.0),
+                        CFrame.new(-1762.0, 37.8, -11878.0),CFrame.new(127.2, 24.8, -12098.7),
+                        CFrame.new(5319.0, 1005.4, 360.8),  
+                        CFrame.new(-16270.0, 25.2, 1373.8)  
+                    }
                     
-                    if not foundHaze then
-                        for _, v in pairs(ReplicatedStorage:GetChildren()) do
-                            if v:FindFirstChild("HazeESP") then
-                                foundHaze = true
-                                SmartMove(v.HumanoidRootPart.CFrame * Pos)
-                                break
-                            end
+                    if _G.NeedResetFromSubmerged then
+                        print("Yama Q2: Đang tự sát để thoát khỏi Tàu Ngầm...")
+                        Tween2(HazeIslands[_G.HzIdx])
+                        if (player.Character.HumanoidRootPart.Position - HazeIslands[_G.HzIdx].Position).Magnitude < 1500 then
+                            
+                            _G.IsResetting = true 
+                            task.wait(0.2)
+                            
+                            pcall(function()
+                                local char = player.Character
+                                for _,v in pairs(char.HumanoidRootPart:GetChildren()) do
+                                    if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
+                                end
+                                char.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
+                                char.Humanoid.Health = 0
+                                char:BreakJoints()
+                            end)
+                            
+                            task.wait(6) 
+                            _G.IsResetting = false 
+                            _G.NeedResetFromSubmerged = false
                         end
-                    end
-                    
-                    if not foundHaze then
-                        local HazeIslands = {
-                            CFrame.new(3399.3, 72.4, 1573.0),   CFrame.new(-2131.0, 38.0, -10106.0),
-                            CFrame.new(-950.0, 59.0, -10907.0), CFrame.new(5138.2, 12.3, 431.6),
-                            CFrame.new(-16204.1, 9.1, 479.2),   CFrame.new(-9509.3, 142.1, 5535.2),
-                            CFrame.new(-12548.0, 337.0, -7481.0),CFrame.new(-247.1, 20.7, 5562.0),
-                            CFrame.new(2443.1, 21.7, -6573.4),  CFrame.new(-10016.0, 332.0, -8326.0),
-                            CFrame.new(-1762.0, 37.8, -11878.0),CFrame.new(127.2, 24.8, -12098.7),
-                            CFrame.new(5319.0, 1005.4, 360.8),  
-                            CFrame.new(-16270.0, 25.2, 1373.8)  
-                        }
                         
-                        if _G.NeedResetFromSubmerged then
-                            print("Yama Q2: Đang tự sát để thoát khỏi Tàu Ngầm...")
-                            Tween2(HazeIslands[_G.HzIdx])
-                            if (plr.Character.HumanoidRootPart.Position - HazeIslands[_G.HzIdx].Position).Magnitude < 1500 then
-                                _G.IsResetting = true 
-                                task.wait(0.2)
-                                pcall(function()
-                                    local char = plr.Character
-                                    for _,v in pairs(char.HumanoidRootPart:GetChildren()) do
-                                        if v:IsA("BodyVelocity") or v:IsA("BodyGyro") then v:Destroy() end
-                                    end
-                                    char.Humanoid:ChangeState(Enum.HumanoidStateType.Dead)
-                                    char.Humanoid.Health = 0
-                                    char:BreakJoints()
-                                end)
-                                task.wait(6) 
-                                _G.IsResetting = false 
-                                _G.NeedResetFromSubmerged = false
-                            end
-                        elseif _G.HzIdx == 14 then
-                            print("Yama Q2: Tương tác NPC SubmarineWorkerSpeak...")
-                            Tween2(HazeIslands[14])
-                            if (plr.Character.HumanoidRootPart.Position - HazeIslands[14].Position).Magnitude < 15 then
-                                pcall(function()
-                                    game:GetService("ReplicatedStorage").Modules.Net["RF/SubmarineWorkerSpeak"]:InvokeServer("TravelToSubmergedIsland")
-                                end)
-                                task.wait(5) 
-                                _G.HzIdx = 1
-                                _G.NeedResetFromSubmerged = true
-                            end
-                        else
-                            print("Yama Q2: Tuần tra đảo " .. _G.HzIdx .. "/14 (Đợi 5s load quái)")
-                            Tween2(HazeIslands[_G.HzIdx])
-                            if (plr.Character.HumanoidRootPart.Position - HazeIslands[_G.HzIdx].Position).Magnitude < 300 then
-                                task.wait(5) 
-                                _G.HzIdx = _G.HzIdx + 1
-                                if _G.HzIdx > 14 then _G.HzIdx = 1 end
-                            end
+                    elseif _G.HzIdx == 14 then
+                        print("Yama Q2: Tương tác NPC SubmarineWorkerSpeak...")
+                        Tween2(HazeIslands[14])
+                        if (player.Character.HumanoidRootPart.Position - HazeIslands[14].Position).Magnitude < 15 then
+                            pcall(function()
+                                game:GetService("ReplicatedStorage").Modules.Net["RF/SubmarineWorkerSpeak"]:InvokeServer("TravelToSubmergedIsland")
+                            end)
+                            task.wait(5) 
+                            _G.HzIdx = 1
+                            _G.NeedResetFromSubmerged = true
+                        end
+                        
+                    else
+                        print("Yama Q2: Tuần tra đảo " .. _G.HzIdx .. "/14 (Đợi 5s load quái)")
+                        Tween2(HazeIslands[_G.HzIdx])
+                        if (player.Character.HumanoidRootPart.Position - HazeIslands[_G.HzIdx].Position).Magnitude < 300 then
+                            task.wait(5) 
+                            _G.HzIdx = _G.HzIdx + 1
+                            if _G.HzIdx > 14 then _G.HzIdx = 1 end
                         end
                     end
-                end)
-            end
+                end
+            end)
         end
-    end)
+    end
+end)
 
-    -- Yama Q3
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Yama_3 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    local hell = workspace.Map:FindFirstChild("HellDimension")
-                    if hell and (plr.Character.HumanoidRootPart.Position - hell.Spawn.Position).Magnitude < 3000 then
-                        local foundMob = false
-                        for _, v in pairs(workspace.Enemies:GetChildren()) do
-                            if (string.find(v.Name, "Cursed Skeleton") or string.find(v.Name, "Hell's Messenger")) and v.Humanoid.Health > 0 then
-                                foundMob = true; 
-                                SmartMove(v.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
+-- Yama Q3
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Yama_3 and not _G.AutoFarm_Bone then
+            pcall(function()
+                local hell = workspace.Map:FindFirstChild("HellDimension")
+                if hell and (player.Character.HumanoidRootPart.Position - hell.Spawn.Position).Magnitude < 3000 then
+                    local foundMob = false
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if (string.find(v.Name, "Cursed Skeleton") or string.find(v.Name, "Hell's Messenger")) and v.Humanoid.Health > 0 then
+                            foundMob = true; 
+                            SmartMove(v.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
+                        end
+                    end
+                    if not foundMob then
+                        for i = 1, 3 do
+                            local t = hell:FindFirstChild("Torch"..i)
+                            if t and t:FindFirstChildOfClass("ProximityPrompt") and t.ProximityPrompt.Enabled then
+                                Tween2(t.CFrame); task.wait(1.5)
+                                VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); task.wait(3); VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
                             end
                         end
-                        if not foundMob then
-                            for i = 1, 3 do
-                                local t = hell:FindFirstChild("Torch"..i)
-                                if t and t:FindFirstChildOfClass("ProximityPrompt") and t.ProximityPrompt.Enabled then
-                                    Tween2(t.CFrame); task.wait(1.5)
-                                    VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); task.wait(3); VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                                end
-                            end
-                            local exitP = hell:FindFirstChild("Exit")
-                            if exitP then
-                                local bv = plr.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
-                                if bv then bv:Destroy() end
-                                plr.Character.HumanoidRootPart.CFrame = exitP.CFrame
-                            end
+                        local exitP = hell:FindFirstChild("Exit")
+                        if exitP then
+                            local bv = player.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
+                            if bv then bv:Destroy() end
+                            player.Character.HumanoidRootPart.CFrame = exitP.CFrame
                         end
+                    end
+                else
+                    local reaper = workspace.Enemies:FindFirstChild("Soul Reaper")
+                    if reaper and reaper.Humanoid.Health > 0 then
+                        print("Yama Q3: Hứng đòn từ Soul Reaper...")
+                        SmartMove(reaper.HumanoidRootPart.CFrame * CFrame.new(0,0,-2))
                     else
-                        local reaper = workspace.Enemies:FindFirstChild("Soul Reaper")
-                        if reaper and reaper.Humanoid.Health > 0 then
-                            print("Yama Q3: Hứng đòn từ Soul Reaper...")
-                            SmartMove(reaper.HumanoidRootPart.CFrame * CFrame.new(0,0,-2))
+                        if player.Backpack:FindFirstChild("Hallow Essence") or player.Character:FindFirstChild("Hallow Essence") then
+                            print("Yama Q3: Đang đem Hallow Essence đi triệu hồi Boss...")
+                            local altarPos = CFrame.new(-8932.32, 146.83, 6062.55)
+                            Tween2(altarPos)
+                            if (altarPos.Position - player.Character.HumanoidRootPart.Position).Magnitude <= 10 then
+                                EquipSword("Hallow Essence")
+                            end
                         else
-                            if plr.Backpack:FindFirstChild("Hallow Essence") or plr.Character:FindFirstChild("Hallow Essence") then
-                                print("Yama Q3: Đang đem Hallow Essence đi triệu hồi Boss...")
-                                local altarPos = CFrame.new(-8932.32, 146.83, 6062.55)
-                                Tween2(altarPos)
-                                if (altarPos.Position - plr.Character.HumanoidRootPart.Position).Magnitude <= 10 then
-                                    EquipSword("Hallow Essence")
+                            AutoHop(API_SOUL_REAPER, "Tìm Soul Reaper")
+                            
+                            local bones = CommF:InvokeServer("Bones", "Check") or 0
+                            if bones >= 50 then
+                                print("Yama Q3: Đủ 50 Xương, Đang bay đi Random...")
+                                Tween2(CFrame.new(-9570, 315, 6726))
+                                if (player.Character.HumanoidRootPart.Position - CFrame.new(-9570, 315, 6726).Position).Magnitude < 100 then
+                                    CommF:InvokeServer("Bones", "Buy", 1, 1)
                                 end
                             else
-                                AutoHop(API_SOUL_REAPER, "Tìm Soul Reaper")
-                                local bones = CommF_:InvokeServer("Bones", "Check") or 0
-                                if bones >= 50 then
-                                    print("Yama Q3: Đủ 50 Xương, Đang bay đi Random...")
-                                    Tween2(CFrame.new(-9570, 315, 6726))
-                                    if (plr.Character.HumanoidRootPart.Position - CFrame.new(-9570, 315, 6726).Position).Magnitude < 100 then
-                                        CommF_:InvokeServer("Bones", "Buy", 1, 1)
+                                print("Yama Q3: Đang Farm Xương kiếm Essence ("..bones.."/50)...")
+                                local target = nil
+                                for _, v in pairs(workspace.Enemies:GetChildren()) do
+                                    if table.find(BoneMobs, v.Name) and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                                        target = v; break
                                     end
+                                end
+                                if target then
+                                    if not _G.IsTakingDamage then
+    EquipSword(_G.CurrentSword)
+end
+                                    SmartMove(target.HumanoidRootPart.CFrame * Pos)
+                                    target.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
+                                    _G.MonFarm = target.Name; _G.FarmPos = target.HumanoidRootPart.CFrame
+                                    AttackNoCoolDown()
                                 else
-                                    print("Yama Q3: Đang Farm Xương kiếm Essence ("..bones.."/50)...")
-                                    local target = nil
-                                    for _, v in pairs(workspace.Enemies:GetChildren()) do
-                                        if table.find(BoneMobs, v.Name) and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                                            target = v; break
-                                        end
-                                    end
-                                    if target then
-                                        EquipSword(_G.CurrentSword)
-                                        SmartMove(target.HumanoidRootPart.CFrame * Pos)
-                                        target.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
-                                        _G.MonFarm = target.Name; _G.FarmPos = target.HumanoidRootPart.CFrame
-                                        AttackNoCoolDown()
-                                    else
-                                        Tween2(CFrame.new(-9495, 450, 5977)) 
-                                    end
+                                    Tween2(CFrame.new(-9495, 450, 5977)) 
                                 end
                             end
                         end
                     end
-                end)
-            end
+                end
+            end)
         end
-    end)
+    end
+end)
 
-    -- Tushita Q1
-    _G.DealerStep = 1
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Tushita_1 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    local progress = CommF_:InvokeServer("CDKQuest", "Progress")
-                    if progress and tonumber(progress.Good) == 1 then
-                        return 
+-- Tushita Q1
+_G.DealerStep = 1
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Tushita_1 and not _G.AutoFarm_Bone then
+            pcall(function()
+                local progress = CommF:InvokeServer("CDKQuest", "Progress")
+                if progress and tonumber(progress.Good) == 1 then
+                    return 
+                end
+                
+                local dealers = {
+                    CFrame.new(-4602.51, 16.44, -2880.99),
+                    CFrame.new(4001.18, 10.08, -2654.86),
+                    CFrame.new(-9530.76, 7.24, -8375.50)
+                }
+                
+                local target = dealers[_G.DealerStep]
+                if target then
+                    print("🎯 Tushita Q1: Bay tới Boat Dealer " .. _G.DealerStep .. "/3")
+                    Tween2(target)
+                    
+                    if (player.Character.HumanoidRootPart.Position - target.Position).Magnitude <= 10 then
+                        task.wait(0.7)
+                        CommF:InvokeServer("CDKQuest", "BoatQuest", workspace.NPCs:FindFirstChild("Luxury Boat Dealer"), "Check")
+                        task.wait(0.5)
+                        CommF:InvokeServer("CDKQuest", "BoatQuest", workspace.NPCs:FindFirstChild("Luxury Boat Dealer"))
+                        task.wait(1)
+                        
+                        _G.DealerStep = _G.DealerStep + 1
+                        if _G.DealerStep > 3 then _G.DealerStep = 1 end
                     end
-                    local dealers = {
-                        CFrame.new(-4602.51, 16.44, -2880.99),
-                        CFrame.new(4001.18, 10.08, -2654.86),
-                        CFrame.new(-9530.76, 7.24, -8375.50)
-                    }
-                    local target = dealers[_G.DealerStep]
-                    if target then
-                        print("🎯 Tushita Q1: Bay tới Boat Dealer " .. _G.DealerStep .. "/3")
-                        Tween2(target)
-                        if (plr.Character.HumanoidRootPart.Position - target.Position).Magnitude <= 10 then
-                            task.wait(0.7)
-                            CommF_:InvokeServer("CDKQuest", "BoatQuest", workspace.NPCs:FindFirstChild("Luxury Boat Dealer"), "Check")
-                            task.wait(0.5)
-                            CommF_:InvokeServer("CDKQuest", "BoatQuest", workspace.NPCs:FindFirstChild("Luxury Boat Dealer"))
-                            task.wait(1)
-                            _G.DealerStep = _G.DealerStep + 1
-                            if _G.DealerStep > 3 then _G.DealerStep = 1 end
-                        end
-                    end
-                end)
-            end
+                end
+            end)
         end
-    end)
+    end
+end)
 
-    -- Tushita Q2
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Tushita_2 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    if (CFrame.new(-5539, 313, -2972).Position - plr.Character.HumanoidRootPart.Position).Magnitude > 500 then
-                        Tween2(CFrame.new(-5545, 313, -2976))
-                    else
-                        local p = nil
-                        for _, v in pairs(workspace.Enemies:GetChildren()) do
-                            if v.Humanoid.Health > 0 and (v.HumanoidRootPart.Position - plr.Character.HumanoidRootPart.Position).Magnitude < 2000 then
-                                p = v; break
-                            end
+-- Tushita Q2
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Tushita_2 and not _G.AutoFarm_Bone then
+            pcall(function()
+                if (CFrame.new(-5539, 313, -2972).Position - player.Character.HumanoidRootPart.Position).Magnitude > 500 then
+                    Tween2(CFrame.new(-5545, 313, -2976))
+                else
+                    local p = nil
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if v.Humanoid.Health > 0 and (v.HumanoidRootPart.Position - player.Character.HumanoidRootPart.Position).Magnitude < 2000 then
+                            p = v; break
                         end
-                        if p then 
-                            SmartMove(p.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
-                        else AutoHop(API_PIRATE_RAID, "Tìm Pirate Raid") end
                     end
-                end)
-            end
+                    if p then 
+                        SmartMove(p.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
+                    else AutoHop(API_PIRATE_RAID, "Tìm Pirate Raid") end
+                end
+            end)
         end
-    end)
+    end
+end)
 
-    -- Tushita Q3
-    task.spawn(function()
-        while task.wait() do
-            if Auto_Quest_Tushita_3 and not _G.AutoFarm_Bone then
-                pcall(function()
-                    local heav = workspace.Map:FindFirstChild("HeavenlyDimension")
-                    if heav and (plr.Character.HumanoidRootPart.Position - heav.Spawn.Position).Magnitude < 3000 then
-                        local foundMob = false
-                        for _, v in pairs(workspace.Enemies:GetChildren()) do
-                            if (string.find(v.Name, "Cursed Skeleton") or string.find(v.Name, "Heaven's Guardian")) and v.Humanoid.Health > 0 then
-                                foundMob = true; 
-                                EquipSword(_G.CurrentSword)
-                                SmartMove(v.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
-                            end
-                        end
-                        if not foundMob then
-                            local allLit = true 
-                            for i = 1, 3 do
-                                local t = heav:FindFirstChild("Torch"..i)
-                                if t and t:FindFirstChildOfClass("ProximityPrompt") and t.ProximityPrompt.Enabled then
-                                    allLit = false 
-                                    Tween2(t.CFrame); task.wait(1.5)
-                                    VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); 
-                                    task.wait(3); 
-                                    VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-                                    task.wait(0.5)
-                                end
-                            end
-                            if allLit then
-                                local exitP = heav:FindFirstChild("Exit")
-                                if exitP then
-                                    local bv = plr.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
-                                    if bv then bv:Destroy() end
-                                    plr.Character.HumanoidRootPart.CFrame = exitP.CFrame
-                                end
-                            end
-                        end
-                    else
-                        local cq = nil
-                        for _, v in pairs(workspace.Enemies:GetChildren()) do
-                            if string.find(v.Name, "Cake Queen") and v.Humanoid.Health > 0 then cq = v; break end
-                        end
-                        if cq then 
+-- Tushita Q3
+task.spawn(function()
+    while task.wait() do
+        if Auto_Quest_Tushita_3 and not _G.AutoFarm_Bone then
+            pcall(function()
+                local heav = workspace.Map:FindFirstChild("HeavenlyDimension")
+                if heav and (player.Character.HumanoidRootPart.Position - heav.Spawn.Position).Magnitude < 3000 then
+                    local foundMob = false
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if (string.find(v.Name, "Cursed Skeleton") or string.find(v.Name, "Heaven's Guardian")) and v.Humanoid.Health > 0 then
+                            foundMob = true; 
                             EquipSword(_G.CurrentSword)
-                            SmartMove(cq.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
-                        else
-                            Tween2(CFrame.new(-709, 381, -11011))
-                            if (plr.Character.HumanoidRootPart.Position - Vector3.new(-709, 381, -11011)).Magnitude < 200 then
-                                if not _G.CQDeadTimer then _G.CQDeadTimer = tick() end
-                                if tick() - _G.CQDeadTimer > 7 then AutoHop(API_CAKE_QUEEN, "Tìm Cake Queen") end
+                            SmartMove(v.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
+                        end
+                    end
+                    
+                    if not foundMob then
+                        local allLit = true 
+                        for i = 1, 3 do
+                            local t = heav:FindFirstChild("Torch"..i)
+                            if t and t:FindFirstChildOfClass("ProximityPrompt") and t.ProximityPrompt.Enabled then
+                                allLit = false 
+                                Tween2(t.CFrame); task.wait(1.5)
+                                VIM:SendKeyEvent(true, Enum.KeyCode.E, false, game); 
+                                task.wait(3); 
+                                VIM:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+                                task.wait(0.5)
+                            end
+                        end
+                        
+                        if allLit then
+                            local exitP = heav:FindFirstChild("Exit")
+                            if exitP then
+                                local bv = player.Character.HumanoidRootPart:FindFirstChild("BodyVelocity")
+                                if bv then bv:Destroy() end
+                                player.Character.HumanoidRootPart.CFrame = exitP.CFrame
                             end
                         end
                     end
-                end)
+                else
+                    local cq = nil
+                    for _, v in pairs(workspace.Enemies:GetChildren()) do
+                        if string.find(v.Name, "Cake Queen") and v.Humanoid.Health > 0 then cq = v; break end
+                    end
+                    if cq then 
+                        EquipSword(_G.CurrentSword)
+                        SmartMove(cq.HumanoidRootPart.CFrame * Pos); AttackNoCoolDown()
+                    else
+                        Tween2(CFrame.new(-709, 381, -11011))
+                        if (player.Character.HumanoidRootPart.Position - Vector3.new(-709, 381, -11011)).Magnitude < 200 then
+                            if not _G.CQDeadTimer then _G.CQDeadTimer = tick() end
+                            if tick() - _G.CQDeadTimer > 7 then AutoHop(API_CAKE_QUEEN, "Tìm Cake Queen") end
+                        end
+                    end
+                end
+            end)
+        end
+    end
+end)
+
+-- ==========================================
+-- GOM QUÁI (BRING MOB) VÀ DỌN XÁC GHOST MOB
+-- ==========================================
+task.spawn(function()
+    while task.wait(0.5) do
+        pcall(function()
+            if _G.BringMob and _G.MonFarm then
+                for _, v in pairs(workspace.Enemies:GetChildren()) do
+                    if v.Name == _G.MonFarm and v:FindFirstChild("Humanoid") and v.Humanoid.Health <= 0 then
+                        if v:FindFirstChild("HumanoidRootPart") then
+                            v.HumanoidRootPart.CFrame = CFrame.new(0, -9999, 0)
+                        end
+                        game:GetService("Debris"):AddItem(v, 1)
+                    end
+                end
             end
-        end
-    end)
+        end)
+    end
+end)
 
-    -- Bring Mob
-    task.spawn(function()
-        while task.wait(0.5) do
-            pcall(function()
-                if _G.BringMob and _G.MonFarm then
-                    for _, v in pairs(workspace.Enemies:GetChildren()) do
-                        if v.Name == _G.MonFarm and v:FindFirstChild("Humanoid") and v.Humanoid.Health <= 0 then
-                            if v:FindFirstChild("HumanoidRootPart") then
-                                v.HumanoidRootPart.CFrame = CFrame.new(0, -9999, 0)
-                            end
-                            game:GetService("Debris"):AddItem(v, 1)
+spawn(function()
+    while wait() do
+        pcall(function()
+            if _G.BringMob and _G.FarmPos and _G.MonFarm then
+                for _, v in pairs(workspace.Enemies:GetChildren()) do
+                    if v.Name == _G.MonFarm and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
+                        if v:FindFirstChild("HumanoidRootPart") and (v.HumanoidRootPart.Position - _G.FarmPos.Position).Magnitude <= 1500 then
+                            v.HumanoidRootPart.CFrame = _G.FarmPos
+                            v.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
+                            v.HumanoidRootPart.Transparency = 1
+                            v.HumanoidRootPart.CanCollide = false
+                            v.Humanoid.JumpPower = 0
+                            v.Humanoid.WalkSpeed = 0
+                            if v:FindFirstChild("Head") then v.Head.CanCollide = false end
+                            if v.Humanoid:FindFirstChild("Animator") then v.Humanoid.Animator:Destroy() end
+                            v.Humanoid:ChangeState(11)
+                            v.Humanoid:ChangeState(14)
+                            sethiddenproperty(player, "SimulationRadius", math.huge)
                         end
                     end
                 end
-            end)
-        end
-    end)
+            end
+        end)
+    end
+end)
 
-    task.spawn(function()
-        while task.wait() do
-            pcall(function()
-                if _G.BringMob and _G.FarmPos and _G.MonFarm then
-                    for _, v in pairs(workspace.Enemies:GetChildren()) do
-                        if v.Name == _G.MonFarm and v:FindFirstChild("Humanoid") and v.Humanoid.Health > 0 then
-                            if v:FindFirstChild("HumanoidRootPart") and (v.HumanoidRootPart.Position - _G.FarmPos.Position).Magnitude <= 1500 then
-                                v.HumanoidRootPart.CFrame = _G.FarmPos
-                                v.HumanoidRootPart.Size = Vector3.new(60, 60, 60)
-                                v.HumanoidRootPart.Transparency = 1
-                                v.HumanoidRootPart.CanCollide = false
-                                v.Humanoid.JumpPower = 0
-                                v.Humanoid.WalkSpeed = 0
-                                if v:FindFirstChild("Head") then v.Head.CanCollide = false end
-                                if v.Humanoid:FindFirstChild("Animator") then v.Humanoid.Animator:Destroy() end
-                                v.Humanoid:ChangeState(11)
-                                v.Humanoid:ChangeState(14)
-                                sethiddenproperty(plr, "SimulationRadius", math.huge)
-                            end
-                        end
-                    end
-                end
-            end)
-        end
-    end)
-
-    -- Hệ thống quyết định bật Auto CDK
+    -- ===== HỆ THỐNG QUYẾT ĐỊNH KHI NÀO BẬT AUTO CDK =====
     task.spawn(function()
         while task.wait(3) do
             pcall(function()
@@ -1357,6 +1422,7 @@ if cdkCfg.Enabled then
                 local hasC = hasCDK()
                 local raceStatus = checkRaceV3()
 
+                -- Nếu đã có CDK rồi thì không cần chạy nữa
                 if hasC then
                     if _G.Auto_DualKatana then
                         _G.Auto_DualKatana = false
@@ -1366,6 +1432,7 @@ if cdkCfg.Enabled then
                     return
                 end
 
+                -- Nếu có cả Yama và Tushita nhưng chưa V3 -> ưu tiên V3, tắt CDK nếu đang chạy
                 if hasY and hasT and not hasC then
                     if raceStatus ~= "V3" and raceStatus ~= "V4" then
                         if _G.Auto_DualKatana then
@@ -1375,6 +1442,7 @@ if cdkCfg.Enabled then
                         end
                         return
                     else
+                        -- Đủ điều kiện: bật Auto CDK
                         if not _G.Auto_DualKatana then
                             _G.Auto_DualKatana = true
                             _G.IsDoingAutoCDK = true
@@ -1384,6 +1452,7 @@ if cdkCfg.Enabled then
                     end
                 end
 
+                -- Nếu chưa đủ kiếm thì tắt CDK
                 if _G.Auto_DualKatana then
                     _G.Auto_DualKatana = false
                     _G.IsDoingAutoCDK = false
@@ -1392,6 +1461,8 @@ if cdkCfg.Enabled then
             end)
         end
     end)
+
+    -- Bring mob & dọn xác (giữ nguyên từ script cdk)
 end
 
 -- =====================================================================
@@ -1463,6 +1534,7 @@ task.spawn(function()
 
             task.spawn(function()
                 while task.wait(1.5) do
+                    -- 🔒 CHẶN RACE MASTER KHI ĐANG AUTO CDK
                     if _G.IsDoingAutoCDK then
                         _G.AutoRaceV2 = false
                         _G.AutoRaceV3 = false
@@ -1475,6 +1547,7 @@ task.spawn(function()
                             _G.AutoRaceV2 = false
                             _G.AutoRaceV3 = false
                             
+                            -- Nếu đang ở Sea 2, tự động quay lại Sea 3
                             local place = game.PlaceId
                             local isSea2 = (place == 4442272183 or place == 79091703265657)
                             if isSea2 then
@@ -1487,12 +1560,14 @@ task.spawn(function()
                             return
                         end
 
+                        -- KIỂM TRA VÀ DI CHUYỂN VỀ SEA 2 NẾU CẦN
                         local place = game.PlaceId
                         local isSea2 = (place == 4442272183 or place == 79091703265657)
                         if not isSea2 then
                             if _G.AutoRaceV2 or _G.AutoRaceV3 then
                                 print("[Race Master] Chưa ở Sea 2, đang yêu cầu dịch chuyển...")
                                 CommF_("TravelDressrosa")
+                                -- Chờ thực sự đến Sea 2 (tối đa 30 giây)
                                 local waited = 0
                                 repeat
                                     task.wait(1)
@@ -1618,6 +1693,7 @@ task.spawn(function()
                 end
             end)
             
+            -- Đã kích hoạt xong hệ thống Race Master, thoát vòng lặp check Level
             break 
         end
     end
