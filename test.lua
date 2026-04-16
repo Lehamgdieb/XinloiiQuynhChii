@@ -145,9 +145,12 @@ local function TryLoadKaitun()
 
     -- Cho phép Kaitun nếu đang làm Haze, bất kể có đang Auto CDK hay không
     local doingHaze = isDoingHazeQuest()
-    if not doingHaze and _G.IsDoingAutoCDK then
-        return  -- Chỉ chặn nếu không làm Haze và đang Auto CDK
-    end
+    
+    -- SỬA: Không chặn Kaitun nếu đang AutoCDK mà không làm Haze. 
+    -- Thay vào đó, quyết định chạy Kaitun dựa trên vũ khí hiện có.
+    -- if not doingHaze and _G.IsDoingAutoCDK then
+    --     return  -- Chỉ chặn nếu không làm Haze và đang Auto CDK
+    -- end
 
     local currentLvl = getLevel()
     
@@ -163,8 +166,8 @@ local function TryLoadKaitun()
         return
     end
 
-    -- Level đã đủ: chỉ chạy Kaitun nếu ĐANG LÀM QUEST HAZE hoặc ĐÃ CÓ CDK
-    if doingHaze or hasCDK() then
+    -- Level đã đủ: chạy Kaitun nếu ĐANG LÀM QUEST HAZE hoặc ĐÃ CÓ YAMA VÀ TUSHITA (chờ Auto CDK xử lý) hoặc ĐÃ CÓ CDK
+    if doingHaze or hasCDK() or (hasYama() and hasTushita() and not _G.IsDoingAutoCDK) then
         local raceStatus = checkRaceV3()
         if raceStatus == "V3" or raceStatus == "V4" then
             KaitunLoaded = true
@@ -1031,7 +1034,13 @@ end
                         elseif frags == 3 then Auto_Quest_Yama_1 = true; CommF_("CDKQuest", "StartTrial", "Evil")
                         elseif frags == 2 then Auto_Quest_Tushita_3 = true; CommF_("CDKQuest", "StartTrial", "Good")
                         elseif frags == 1 then Auto_Quest_Tushita_2 = true; CommF_("CDKQuest", "StartTrial", "Good")
-                        elseif frags == 0 then Auto_Quest_Tushita_1 = true; CommF_("CDKQuest", "StartTrial", "Good")
+                        
+                        -- SỬA: Chỉ đặt Auto_Quest_Tushita_1 nếu KHÔNG ĐANG LÀM HAZE
+                        elseif frags == 0 then 
+                            if not isDoingHazeQuest() then
+                                Auto_Quest_Tushita_1 = true; 
+                                CommF_("CDKQuest", "StartTrial", "Good")
+                            end
                         end
                     end)
                 end
@@ -1251,6 +1260,12 @@ task.spawn(function()
     while task.wait() do
         if Auto_Quest_Tushita_1 and not _G.AutoFarm_Bone then
             pcall(function()
+                -- SỬA: Check lại Haze Quest ở đây để cẩn thận
+                if isDoingHazeQuest() then
+                    print("🎯 Đang làm Haze Quest, bỏ qua Tushita Q1 tạm thời")
+                    return
+                end
+                
                 local progress = CommF:InvokeServer("CDKQuest", "Progress")
                 if progress and tonumber(progress.Good) == 1 then
                     return 
